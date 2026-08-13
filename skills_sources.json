@@ -7,7 +7,9 @@
             {
                 "source": "skills",
                 "dest": "skills",
-                "exclude": ["claude-api"]
+                "exclude": [
+                    "claude-api"
+                ]
             }
         ]
     },
@@ -142,7 +144,10 @@
             {
                 "source": "skills",
                 "dest": "skills",
-                "exclude": []
+                "exclude": [],
+                "include": [
+                    "remotion-best-practices"
+                ]
             }
         ]
     },
