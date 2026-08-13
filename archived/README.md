@@ -1,8 +1,32 @@
 # Archived 归档目录
 
-本目录存放已被上游废弃、不再使用的技能副本，仅作历史存档。
+本目录存放已归档的内容：低频使用但保留上游同步的技能、废弃包、历史文档。
 
 ## 归档清单
+
+### skills/（13 个低频技能，保留上游同步）
+
+| 类别 | 技能 |
+|---|---|
+| 发布类 | baoyu-post-to-wechat / baoyu-post-to-weibo / baoyu-post-to-x |
+| 漫画配图 | baoyu-comic / baoyu-article-illustrator |
+| 封面卡片 | baoyu-cover-image / baoyu-image-cards / baoyu-xhs-images |
+| 图片压缩 | baoyu-compress-image |
+| 心智建模 | bdi-mental-states |
+| Obsidian | obsidian-cli / obsidian-markdown / obsidian-bases |
+
+这些技能仍随 `skills_sources.json` 配置同步到 `archived/skills/`（`git pull` 或手动 `oah sync` 可更新），`~/.claude/skills` 符号链接保持可用。
+
+### docs/backup/（旧版手册，2026-08-14 归档）
+
+- Antigravity_Skills_Manual.en.md / Antigravity_Skills_Manual.zh-CN.md（约 960 行 × 2）
+- 归档原因：已被 `docs/` 下新的 Skill/Agent/Command Guidelines 取代
+
+### 顶层文档（2026-08-14 归档）
+
+- CHANGELOG.md — 原仓库版本历史（本仓库修改已总结于根 README）
+- CONTRIBUTING.md — 社区贡献指南（fork 仓库无需）
+- GEMINI.md — Gemini 编码行为规范（本机使用 Claude，保留 CLAUDE.md / AGENTS.md）
 
 ### science_skills_common（2026-08-14 归档）
 

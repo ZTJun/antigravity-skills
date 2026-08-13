@@ -1,176 +1,142 @@
-# open-agent-hub
+# open-agent-hub（antigravity-skills）
 
-**English** | [简体中文](README.zh-CN.md)
+> 本仓库为 **ZTJun/antigravity-skills**（fork 自 [guanyang/open-agent-hub](https://github.com/guanyang/antigravity-skills)），在原仓库基础上做了个性化精简与归档整理。
 
-A lightweight, zero-dependency CLI tool to manage and activate capabilities for AI coding assistants (such as Claude Code, Cursor, Trae, etc.). With a single command, you can link **Skills** (modular prompting), **Agents** (expert workflow roles), and **Commands** (slash commands) to your project workspaces or global system configurations.
+一个轻量、零依赖的 AI 编码助手能力管理仓库。通过一个命令，即可将**技能 (Skills)**、**专家角色 (Agents)** 与**快捷指令 (Commands)** 链接到你的项目工作区或全局配置目录（支持 Claude Code、Antigravity、Cursor、Codex 等）。
 
 ---
 
-## 📂 Directory Structure
+## 📂 目录结构
 
 ```
 .
-├── agents/             # System prompts for expert Agents (agent-*.md)
-├── commands/           # Agent runtime Slash Commands (*.md)
-├── docs/               # Technical specs and user guidelines
-├── scripts/            # CLI manager source code (hub.js)
-├── skills/             # Modular capability skills (83+ skills)
-├── spec/               # Technical specification definitions for capabilities
-├── template/           # Development templates for Skills, Agents, and Commands
-├── AGENTS.md           # Project-level LLM coding guidelines
-├── CLAUDE.md           # Claude-specific coding guidelines
-├── GEMINI.md           # Gemini-specific coding guidelines
-├── CHANGELOG.md        # Changelog of project versions
-├── CONTRIBUTING.md     # Community guidelines for contributions
-├── LICENSE             # MIT license file
-├── SECURITY.md         # Vulnerability reporting policies
-├── package.json        # CLI configuration and npm registration
-├── skills_index.json   # Scanned and generated global metadata index for skills
-├── skills_sources.json # Data sources configuration for `oah sync` command
-├── README.md           # English documentation (this file)
-└── README.zh-CN.md     # Chinese translation documentation
+├── skills/             # ★ 模块化技能库（78 个活跃技能）
+├── archived/           # ★ 归档区（仍保留上游同步）
+│   ├── skills/         #   13 个低频技能（发布/漫画/封面/Obsidian 等）
+│   ├── docs/           #   旧版手册备份（中英双版）
+│   ├── CHANGELOG.md    #   原仓库版本历史
+│   ├── CONTRIBUTING.md #   贡献指南
+│   ├── GEMINI.md       #   Gemini 行为规范（本机使用 Claude）
+│   └── science_skills_common/  # 已废弃共享包（上游已迁移至 polite-http）
+├── agents/             # 专家 Agent 系统提示词 (agent-*.md)
+├── commands/           # Slash Commands (*.md)
+├── docs/               # 技术指南（Skill / Agent / Command Guidelines）
+├── scripts/            # CLI 管理脚本 (hub.js) + 上游同步 (sync_skills.sh)
+├── spec/               # 技能格式规范 (Specification.md)
+├── template/           # 新技能开发模板
+├── .githooks/          # post-merge：pull 后自动同步上游技能
+├── AGENTS.md           # LLM 编码行为规范（项目级）
+├── CLAUDE.md           # Claude 编码行为规范（项目级）
+├── SECURITY.md         # 安全策略
+├── LICENSE             # MIT 开源协议
+├── package.json        # CLI 配置与 npm 注册
+├── skills_index.json   # 技能元数据全局索引
+├── skills_sources.json # 上游技能数据源配置（12 个源）
+└── README.md           # 中文主文档（本文件）
 ```
-*(Note: `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` contain project-level LLM coding behavioral guidelines, derived from [andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills))*
 
 ---
 
-## 📖 Technical Guidelines & Documentation
+## 🔧 本仓库的个性化修改
 
-To maintain clean and focused documentation, deep-dive specifications have been moved under the `docs/` directory. Please refer to:
+以下为 fork 后相对原仓库的改动：
 
-*   🧩 **[Skill Guidelines](docs/Skill_Guidelines.md)**: Design standards, trigger rules, and a complete catalog of the 83+ modular skills.
-*   🤖 **[Agent Guidelines](docs/Agent_Guidelines.md)**: Specifications for Orchestrator, Evaluator, and Optimizer agent roles, detailing handoff contracts and Evaluator-Optimizer loops.
-*   🛠 **[Command Guidelines](docs/Command_Guidelines.md)**: Guidelines for agent-facing slash commands (such as `/commit`, `/review`, and `/test-tdd`).
+### 归档整理（archived/）
+- **低频技能归档**（13 个，仍随上游同步到 `archived/skills/`）：`baoyu-post-to-wechat/-weibo/-x`（发布类）、`baoyu-comic`、`baoyu-article-illustrator`（漫画配图）、`baoyu-cover-image`、`baoyu-image-cards`、`baoyu-xhs-images`（封面卡片）、`baoyu-compress-image`、`bdi-mental-states`、`obsidian-cli/-markdown/-bases`
+- **文档归档**：旧版双语文档、CHANGELOG、CONTRIBUTING、GEMINI.md、废弃共享包 `science_skills_common`
+- `claude-api` 已移出仓库，独立存放于 `~/.claude/skills/claude-api`（不再随本仓库同步）
 
----
+### 技能精简
+- **remotion 细分技能**（12 个）已迁出至独立工作区 `~/Documents/Projects/remotion/`，本仓库仅保留 `remotion` 主技能
+- **science-skills 精简集**：仅保留 `literature_search_arxiv`、`literature_search_openalex`、`uv`、`pymol`、`workflow_skill_creator`（完整 38 技能见 `~/Documents/Projects/biomedic-search/`）
+- **新增上游追踪**：`OfficeCli`（iOfficeAI/OfficeCLI）、`anysearch-skill`（anysearch-ai/anysearch-skill）、`science-skills`（google-deepmind/science-skills）
+- **上游来源修正**：`advanced-evaluation`、`context-*`、`memory-systems` 等实际来自 context-engineering 源（原误归 superpowers）
 
-## 🔌 Compatibility
-
-`open-agent-hub` follows standardized Markdown prompts with YAML frontmatter metadata. The CLI dynamically links components (Skills, Agents, Commands) to their respective subdirectories (`/skills/`, `/agents/`, `/commands/`) within the project or global configuration directories of the AI assistant:
-
-| Tool Name (Agent) | Type | Compatibility | Project Path (Workspace) | Global Path (System) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Claude Code** | CLI | ✅ Full | `.claude/` | `~/.claude/` |
-| **Antigravity** | IDE | ✅ Full | `.agents/` | `~/.gemini/antigravity/` |
-| **Gemini CLI** | CLI | ✅ Full | `.gemini/` | `~/.gemini/` |
-| **Codex** | CLI | ✅ Full | `.codex/` | `~/.codex/` |
-| **Cursor** | IDE | ✅ Full | `.cursor/` | `~/.cursor/` |
-| **Trae** | IDE | ✅ Full | `.trae/` | `~/.trae/` |
-| **OpenCode** | CLI | ✅ Full | `.opencode/` | `~/.config/opencode/` |
-| **Kiro** | CLI/Agent | ✅ Full | `.kiro/` | `~/.kiro/` |
-
-> [!TIP]
-> The CLI tool (`oah`) links files into subdirectories under these paths, e.g., `<Path>/skills/` for skills, `<Path>/agents/` for agents, and `<Path>/commands/` for slash commands.
+### 自动同步
+- `.githooks/post-merge`：`git pull` 后自动同步 **officecli / science-skills / anysearch** 三个源，有变更自动提交
 
 ---
 
-## 🚀 Quick Start
+## 🧩 技能分类速览（78 个活跃技能）
 
-You can install and manage skills either directly using Vercel's standard `skills` CLI, or via our built-in zero-dependency manager (`oah`) which also supports managing Agents and Slash Commands.
+| 类别 | 数量 | 示例 |
+|---|---|---|
+| 文档办公 | 5 | docx / pptx / xlsx / pdf / OfficeCli |
+| 设计创作 | 8 | canvas-design / theme-factory / ui-ux-pro-max |
+| Agent 流程（superpowers） | 14 | brainstorming / TDD / debugging |
+| 上下文工程（context-engineering） | 16 | context-* / evaluation / memory-systems |
+| 内容创作（baoyu） | 14 | translate / image-gen / diagram / wechat-summary |
+| 科学文献（science-skills） | 5 | literature_search_arxiv / openalex / uv / pymol / workflow_skill_creator |
+| 其他 | 16 | anysearch / notebooklm / react-* / supabase / defuddle / json-canvas / remotion |
 
-### Option 1: Quick Install via Vercel's `skills` CLI (Easiest)
+---
 
-If you only need to use the modular **Skills** and are using a compatible agent (like Claude Code, Cursor, etc.), you can use Vercel's official `skills` CLI to install them directly from this repository without cloning:
+## 🚀 快速开始
+
+### 方式一：`skills` CLI（仅技能）
 
 ```bash
-# Add all skills from this repository
-npx skills@latest add guanyang/open-agent-hub
-
-# Add a specific skill (e.g., remotion)
-npx skills@latest add guanyang/open-agent-hub --skill remotion
+npx skills@latest add ZTJun/antigravity-skills
 ```
 
-### Option 2: Clone and use the built-in CLI (`oah`)
+### 方式二：克隆并使用内置 `oah` CLI（技能 + Agents + Commands）
 
-If you want to manage **Skills, Agents, and Slash Commands** dynamically via local symlinks, or if you want to sync upstream sources, you can clone the repository and use our CLI tool:
-
-#### 1. Clone the Hub
-Clone this repository locally (it is recommended to place it in a fixed location for global reference):
 ```bash
-git clone https://github.com/guanyang/open-agent-hub.git ~/open-agent-hub
+git clone https://github.com/ZTJun/antigravity-skills.git ~/antigravity-skills
+cd ~/antigravity-skills && npm link
 ```
 
-#### 2. Global Link via CLI
-In the root directory, run the link command to register the CLI manager `open-agent` (with aliases `open-agent-hub`, `oah`, `ahub`):
+常用命令：
+
 ```bash
-cd ~/open-agent-hub
-npm link
+oah list                          # 列出所有 Skills / Agents / Commands
+oah status                        # 查看当前项目链接状态
+oah enable <skill-name>           # 启用指定技能（链接到 .claude/）
+oah enable                        # 启用全部（默认）
+oah enable --target=all           # 启用全部目标环境
+oah enable --global               # 全局启用
+oah disable                       # 禁用全部
 ```
 
-#### 3. Manage Capabilities
-After linking, you can manage your local agent environments from anywhere:
-```bash
-# List all dynamically scanned Skills, Agents, and Commands
-oah list
+CLI 选项：`-p/--project`（项目级，默认）、`-g/--global`（全局）、`-t/--target <name>`（目标环境：claude/antigravity/gemini/codex/cursor/trae/opencode/kiro）、`--path <dir>`（自定义目录）、`--skills/--agents/--commands`（按类型过滤）
 
-# Check link status in your current project workspace (default behavior)
-oah status
+---
 
-# Check link status in global system configurations (e.g. ~/.claude/)
-oah status --global
+## 🔄 上游同步
 
-# Enable a specific component inside the current project workspace
-oah enable canvas-design
-
-# Enable all components (Skills, Agents, Commands) in current project workspace (defaults to all)
-oah enable
-
-# Enable all components in project workspace for Cursor (links to .cursor/)
-oah enable --target=cursor
-
-# Enable all components in project workspace for ALL supported targets
-oah enable --target=all
-
-# Enable all components globally for ALL supported targets
-oah enable --global --target=all
-
-# Enable all components globally (system-level)
-oah enable --global
-
-# Enable all components in a custom target directory (auto-creates subdirectories dynamically)
-oah enable --path=/path/to/my_agent_dir
-
-# Disable all components inside the current project workspace
-oah disable
-```
-
-#### CLI Filters & Options:
-*   **Filters (Passed as the name argument, mutually exclusive):**
-    *   `<name>`: Enable/disable a single component by its name/ID.
-    *   `--skills`: Enable/disable only all Skills components.
-    *   `--agents`: Enable/disable only all Agents components.
-    *   `--commands`: Enable/disable only all Commands components.
-    *   `--all`, `-a`: Enable/disable all Skills, Agents, and Commands (default behavior when no arguments are provided).
-*   **Options:**
-    *   `-p, --project` (default): Project-level activation (links config directories inside your current working directory, e.g. `.claude/`).
-    *   `-g, --global`: System global level activation (e.g., links into user home config folder, like `~/.claude/`).
-    *   `-t, --target <name>`: Target environment to link to (supported: `claude`, `antigravity`, `gemini`, `codex`, `cursor`, `trae`, `opencode`, `kiro` and `all` to configure all of them, default: `claude`).
-    *   `--path <dir_path>`: Custom base directory to link components into (creates and links within `skills/`, `agents/`, and `commands/` subdirectories automatically).
-
-
-
-## 🔄 Keeping Skills in Sync
-
-Many modular skills in the `skills/` directory originate from active open-source communities. You can sync them with upstream sources using the CLI or the underlying script:
+技能库来自多个开源社区，可随时拉取上游更新：
 
 ```bash
-# Sync all configured sources
+# 同步所有配置的源
 oah sync
 
-# Sync only a specific source (e.g., anthropics-skills)
-oah sync anthropics-skills
+# 同步指定源
+oah sync science-skills
+
+# 或直接调用脚本
+bash scripts/sync_skills.sh <source-name>
 ```
-*Note: Configured upstream sources are stored in `skills_sources.json`. You can also execute this directly via `./scripts/sync_skills.sh`.*
+
+已配置的上游源（`skills_sources.json`）：
+
+| 源 | 上游仓库 | 同步目标 |
+|---|---|---|
+| anthropics-skills | anthropics/skills | skills/（16 个） |
+| superpowers | obra/superpowers | skills/（14 个） |
+| context-engineering | muratcankoylan/Agent-Skills-for-Context-Engineering | skills/（16 个）+ archived（1） |
+| baoyu-skills | JimLiu/baoyu-skills | skills/（14 个）+ archived/skills（9 个） |
+| obsidian-skills | kepano/obsidian-skills | skills/（2 个）+ archived/skills（3 个） |
+| science-skills | google-deepmind/science-skills | skills/（5 个） |
+| officecli | iOfficeAI/OfficeCLI | skills/OfficeCli |
+| anysearch | anysearch-ai/anysearch-skill | skills/anysearch-skill |
+| notebooklm / planning-with-files / vercel-labs / supabase / remotion | 各自上游 | skills/ |
 
 ---
 
-## 🛡️ Security & Contributing
+## 🛡️ 安全
 
-*   **Security Policy**: Please refer to [SECURITY.md](SECURITY.md) to report vulnerabilities.
-*   **Contributing**: We welcome community contributions for new skills, agents, or commands. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+漏洞报告请参见 [SECURITY.md](SECURITY.md)。
 
----
+## 📄 许可证
 
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
+本项目基于 [MIT License](LICENSE)。归档技能与文档保留各自上游许可证。
