@@ -9,6 +9,24 @@
                 "dest": "skills",
                 "exclude": [
                     "claude-api"
+                ],
+                "include": [
+                    "docx",
+                    "pptx",
+                    "xlsx",
+                    "pdf",
+                    "doc-coauthoring",
+                    "frontend-design",
+                    "internal-comms",
+                    "mcp-builder",
+                    "skill-creator",
+                    "slack-gif-creator",
+                    "web-artifacts-builder",
+                    "webapp-testing",
+                    "algorithmic-art",
+                    "brand-guidelines",
+                    "canvas-design",
+                    "theme-factory"
                 ]
             }
         ]
@@ -92,6 +110,22 @@
             {
                 "source": "skills",
                 "dest": "skills",
+                "include": [
+                    "brainstorming",
+                    "dispatching-parallel-agents",
+                    "executing-plans",
+                    "finishing-a-development-branch",
+                    "receiving-code-review",
+                    "requesting-code-review",
+                    "subagent-driven-development",
+                    "systematic-debugging",
+                    "test-driven-development",
+                    "using-git-worktrees",
+                    "using-superpowers",
+                    "verification-before-completion",
+                    "writing-plans",
+                    "writing-skills"
+                ],
                 "exclude": []
             }
         ]
@@ -120,6 +154,32 @@
             {
                 "source": "skills",
                 "dest": "skills",
+                "include": [
+                    "advanced-evaluation",
+                    "context-compression",
+                    "context-degradation",
+                    "context-fundamentals",
+                    "context-optimization",
+                    "evaluation",
+                    "filesystem-context",
+                    "harness-engineering",
+                    "hosted-agents",
+                    "latent-briefing",
+                    "long-horizon-prompting",
+                    "memory-systems",
+                    "multi-agent-patterns",
+                    "project-development",
+                    "self-improvement-loops",
+                    "tool-design"
+                ],
+                "exclude": []
+            },
+            {
+                "source": "skills",
+                "dest": "archived/skills",
+                "include": [
+                    "bdi-mental-states"
+                ],
                 "exclude": []
             }
         ]
@@ -131,7 +191,7 @@
         "copy_rules": [
             {
                 "source": "skills",
-                "dest": "skills",
+                "dest": "archived/skills",
                 "exclude": []
             }
         ]
@@ -176,7 +236,39 @@
         "copy_rules": [
             {
                 "source": "skills",
+                "dest": "archived/skills",
+                "exclude": [],
+                "include": [
+                    "baoyu-post-to-wechat",
+                    "baoyu-post-to-weibo",
+                    "baoyu-post-to-x",
+                    "baoyu-comic",
+                    "baoyu-article-illustrator",
+                    "baoyu-cover-image",
+                    "baoyu-image-cards",
+                    "baoyu-xhs-images",
+                    "baoyu-compress-image"
+                ]
+            },
+            {
+                "source": "skills",
                 "dest": "skills",
+                "include": [
+                    "baoyu-translate",
+                    "baoyu-image-gen",
+                    "baoyu-imagine",
+                    "baoyu-infographic",
+                    "baoyu-diagram",
+                    "baoyu-slide-deck",
+                    "baoyu-markdown-to-html",
+                    "baoyu-wechat-summary",
+                    "baoyu-youtube-transcript",
+                    "baoyu-url-to-markdown",
+                    "baoyu-danger-x-to-markdown",
+                    "baoyu-danger-gemini-web",
+                    "baoyu-electron-extract",
+                    "baoyu-format-markdown"
+                ],
                 "exclude": []
             }
         ]
