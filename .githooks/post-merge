@@ -1,6 +1,7 @@
 #!/bin/bash
-# post-merge hook: 在 git pull / merge 完成后，自动同步 OfficeCli 上游
-# 通过 scripts/sync_skills.sh officecli 拉取 iOfficeAI/OfficeCLI 最新内容
+# post-merge hook: 在 git pull / merge 完成后，自动同步配置的上游技能源
+# 目前支持: officecli (iOfficeAI/OfficeCLI)、science-skills (google-deepmind/science-skills)
+# 通过 scripts/sync_skills.sh 拉取最新内容，有变更则自动提交
 
 set -e
 
@@ -10,20 +11,23 @@ if [ ! -f "scripts/sync_skills.sh" ] || [ ! -f "skills_sources.json" ]; then
     exit 0
 fi
 
-# 仅在 skills_sources.json 中配置了 officecli 源时执行
-if ! grep -q '"officecli"' "skills_sources.json"; then
-    exit 0
-fi
+# 定义需要自动同步的上游源（对应 skills_sources.json 中的 name）
+SOURCES=("officecli" "science-skills")
 
-echo "⟳ post-merge: 同步 OfficeCli 上游..."
-
-if bash scripts/sync_skills.sh officecli; then
-    # 若有变更则自动提交
-    if [ -n "$(git status --porcelain skills/OfficeCli)" ]; then
-        git add skills/OfficeCli
-        git commit -m "chore(sync): auto-sync OfficeCli from upstream [skip ci]" --no-verify
-        echo "✅ OfficeCli 已同步并提交"
-    else
-        echo "✅ OfficeCli 已是最新"
+for src in "${SOURCES[@]}"; do
+    if ! grep -q "\"$src\"" "skills_sources.json"; then
+        continue
     fi
-fi
+
+    echo "⟳ post-merge: 同步 $src 上游..."
+
+    if bash scripts/sync_skills.sh "$src"; then
+        if [ -n "$(git status --porcelain skills/)" ]; then
+            git add skills/ skills_sources.json
+            git commit -m "chore(sync): auto-sync $src from upstream [skip ci]" --no-verify
+            echo "✅ $src 已同步并提交"
+        else
+            echo "✅ $src 已是最新"
+        fi
+    fi
+done

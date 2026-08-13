@@ -28,6 +28,25 @@
         ]
     },
     {
+        "name": "science-skills",
+        "repo_url": "https://github.com/google-deepmind/science-skills.git",
+        "branch": "main",
+        "copy_rules": [
+            {
+                "source": "skills",
+                "dest": "skills",
+                "include": [
+                    "literature_search_arxiv",
+                    "literature_search_openalex",
+                    "uv",
+                    "pymol",
+                    "workflow_skill_creator"
+                ],
+                "exclude": []
+            }
+        ]
+    },
+    {
         "name": "officecli",
         "repo_url": "https://github.com/iOfficeAI/OfficeCLI.git",
         "branch": "main",
