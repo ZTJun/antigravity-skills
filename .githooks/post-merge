@@ -12,7 +12,7 @@ if [ ! -f "scripts/sync_skills.sh" ] || [ ! -f "skills_sources.json" ]; then
 fi
 
 # 定义需要自动同步的上游源（对应 skills_sources.json 中的 name）
-SOURCES=("officecli" "science-skills")
+SOURCES=("officecli" "science-skills" "anysearch")
 
 for src in "${SOURCES[@]}"; do
     if ! grep -q "\"$src\"" "skills_sources.json"; then
