@@ -12,6 +12,25 @@
         ]
     },
     {
+        "name": "anysearch",
+        "repo_url": "https://github.com/anysearch-ai/anysearch-skill.git",
+        "branch": "main",
+        "copy_rules": [
+            {
+                "source": ".",
+                "dest": "skills/anysearch-skill",
+                "exclude": [
+                    ".git",
+                    ".github",
+                    ".gitignore",
+                    ".DS_Store",
+                    ".env",
+                    "runtime.conf"
+                ]
+            }
+        ]
+    },
+    {
         "name": "notebooklm",
         "repo_url": "https://github.com/PleasePrompto/notebooklm-skill.git",
         "branch": "master",
