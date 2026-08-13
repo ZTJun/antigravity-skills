@@ -7,7 +7,7 @@
             {
                 "source": "skills",
                 "dest": "skills",
-                "exclude": []
+                "exclude": ["claude-api"]
             }
         ]
     },
