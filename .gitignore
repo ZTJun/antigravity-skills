@@ -1,4 +1,7 @@
 .DS_Store
+# Local-only agent instructions (not synced to remote)
+/AGENTS.md
+
 # Virtual Environment
 .venv/
 venv/

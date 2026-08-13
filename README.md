@@ -26,7 +26,7 @@
 ├── spec/               # 技能格式规范 (Specification.md)
 ├── template/           # 新技能开发模板
 ├── .githooks/          # post-merge：pull 后自动同步上游技能
-├── AGENTS.md           # LLM 编码行为规范（项目级，OpenCode 读取）
+├── AGENTS.md           # LLM 编码行为规范（仅本地使用，不同步远程）
 ├── SECURITY.md         # 安全策略
 ├── LICENSE             # MIT 开源协议
 ├── package.json        # CLI 配置与 npm 注册
