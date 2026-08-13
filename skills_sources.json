@@ -191,7 +191,21 @@
         "copy_rules": [
             {
                 "source": "skills",
+                "dest": "skills",
+                "include": [
+                    "defuddle",
+                    "json-canvas"
+                ],
+                "exclude": []
+            },
+            {
+                "source": "skills",
                 "dest": "archived/skills",
+                "include": [
+                    "obsidian-bases",
+                    "obsidian-cli",
+                    "obsidian-markdown"
+                ],
                 "exclude": []
             }
         ]
