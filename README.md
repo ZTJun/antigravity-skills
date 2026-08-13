@@ -16,7 +16,8 @@
 │   ├── docs/           #   旧版手册备份（中英双版）
 │   ├── CHANGELOG.md    #   原仓库版本历史
 │   ├── CONTRIBUTING.md #   贡献指南
-│   ├── GEMINI.md       #   Gemini 行为规范（本机使用 Claude）
+│   ├── CLAUDE.md       #   Claude 行为规范（本机使用 OpenCode）
+│   ├── GEMINI.md       #   Gemini 行为规范（本机使用 OpenCode）
 │   └── science_skills_common/  # 已废弃共享包（上游已迁移至 polite-http）
 ├── agents/             # 专家 Agent 系统提示词 (agent-*.md)
 ├── commands/           # Slash Commands (*.md)
@@ -25,8 +26,7 @@
 ├── spec/               # 技能格式规范 (Specification.md)
 ├── template/           # 新技能开发模板
 ├── .githooks/          # post-merge：pull 后自动同步上游技能
-├── AGENTS.md           # LLM 编码行为规范（项目级）
-├── CLAUDE.md           # Claude 编码行为规范（项目级）
+├── AGENTS.md           # LLM 编码行为规范（项目级，OpenCode 读取）
 ├── SECURITY.md         # 安全策略
 ├── LICENSE             # MIT 开源协议
 ├── package.json        # CLI 配置与 npm 注册
@@ -43,7 +43,7 @@
 
 ### 归档整理（archived/）
 - **低频技能归档**（13 个，仍随上游同步到 `archived/skills/`）：`baoyu-post-to-wechat/-weibo/-x`（发布类）、`baoyu-comic`、`baoyu-article-illustrator`（漫画配图）、`baoyu-cover-image`、`baoyu-image-cards`、`baoyu-xhs-images`（封面卡片）、`baoyu-compress-image`、`bdi-mental-states`、`obsidian-cli/-markdown/-bases`
-- **文档归档**：旧版双语文档、CHANGELOG、CONTRIBUTING、GEMINI.md、废弃共享包 `science_skills_common`
+- **文档归档**：旧版双语文档、CHANGELOG、CONTRIBUTING、CLAUDE.md、GEMINI.md、废弃共享包 `science_skills_common`（本机使用 OpenCode，读取 AGENTS.md 即可）
 - `claude-api` 已移出仓库，独立存放于 `~/.claude/skills/claude-api`（不再随本仓库同步）
 
 ### 技能精简

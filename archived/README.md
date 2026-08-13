@@ -26,7 +26,7 @@
 
 - CHANGELOG.md — 原仓库版本历史（本仓库修改已总结于根 README）
 - CONTRIBUTING.md — 社区贡献指南（fork 仓库无需）
-- GEMINI.md — Gemini 编码行为规范（本机使用 Claude，保留 CLAUDE.md / AGENTS.md）
+- CLAUDE.md / GEMINI.md — Claude / Gemini 编码行为规范（本机使用 OpenCode，读取 AGENTS.md 即可）
 
 ### science_skills_common（2026-08-14 归档）
 
