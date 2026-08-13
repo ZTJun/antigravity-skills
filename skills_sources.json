@@ -137,21 +137,6 @@
         ]
     },
     {
-        "name": "remotion-skills",
-        "repo_url": "https://github.com/remotion-dev/skills.git",
-        "branch": "main",
-        "copy_rules": [
-            {
-                "source": "skills",
-                "dest": "skills",
-                "exclude": [],
-                "include": [
-                    "remotion-best-practices"
-                ]
-            }
-        ]
-    },
-    {
         "name": "vercel-labs/agent-skills",
         "repo_url": "https://github.com/vercel-labs/agent-skills.git",
         "branch": "main",
