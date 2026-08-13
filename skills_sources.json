@@ -28,6 +28,23 @@
         ]
     },
     {
+        "name": "officecli",
+        "repo_url": "https://github.com/iOfficeAI/OfficeCLI.git",
+        "branch": "main",
+        "copy_rules": [
+            {
+                "source": ".",
+                "dest": "skills/OfficeCli",
+                "exclude": [
+                    ".git",
+                    ".github",
+                    ".gitignore",
+                    ".DS_Store"
+                ]
+            }
+        ]
+    },
+    {
         "name": "superpowers",
         "repo_url": "https://github.com/obra/superpowers.git",
         "branch": "main",

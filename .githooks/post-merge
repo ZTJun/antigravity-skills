@@ -1,0 +1,29 @@
+#!/bin/bash
+# post-merge hook: 在 git pull / merge 完成后，自动同步 OfficeCli 上游
+# 通过 scripts/sync_skills.sh officecli 拉取 iOfficeAI/OfficeCLI 最新内容
+
+set -e
+
+cd "$(git rev-parse --show-toplevel)"
+
+if [ ! -f "scripts/sync_skills.sh" ] || [ ! -f "skills_sources.json" ]; then
+    exit 0
+fi
+
+# 仅在 skills_sources.json 中配置了 officecli 源时执行
+if ! grep -q '"officecli"' "skills_sources.json"; then
+    exit 0
+fi
+
+echo "⟳ post-merge: 同步 OfficeCli 上游..."
+
+if bash scripts/sync_skills.sh officecli; then
+    # 若有变更则自动提交
+    if [ -n "$(git status --porcelain skills/OfficeCli)" ]; then
+        git add skills/OfficeCli
+        git commit -m "chore(sync): auto-sync OfficeCli from upstream [skip ci]" --no-verify
+        echo "✅ OfficeCli 已同步并提交"
+    else
+        echo "✅ OfficeCli 已是最新"
+    fi
+fi
