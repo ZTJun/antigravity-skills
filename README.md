@@ -47,8 +47,8 @@
 - `claude-api` 已移出仓库，独立存放于 `~/.claude/skills/claude-api`（不再随本仓库同步）
 
 ### 技能精简
-- **remotion 细分技能**（12 个）已迁出至独立工作区 `~/Documents/Projects/remotion/`，本仓库仅保留 `remotion` 主技能
-- **science-skills 精简集**：仅保留 `literature_search_arxiv`、`literature_search_openalex`、`uv`、`pymol`、`workflow_skill_creator`（完整 38 技能见 `~/Documents/Projects/biomedic-search/`）
+- **remotion 细分技能**（12 个）已迁出至独立工作区，本仓库仅保留 `remotion` 主技能
+- **science-skills 精简集**：仅保留 `literature_search_arxiv`、`literature_search_openalex`、`uv`、`pymol`、`workflow_skill_creator`（完整 38 技能见独立工作区）
 - **新增上游追踪**：`OfficeCli`（iOfficeAI/OfficeCLI）、`anysearch-skill`（anysearch-ai/anysearch-skill）、`science-skills`（google-deepmind/science-skills）
 - **上游来源修正**：`advanced-evaluation`、`context-*`、`memory-systems` 等实际来自 context-engineering 源（原误归 superpowers）
 
