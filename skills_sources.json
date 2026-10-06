@@ -286,5 +286,22 @@
                 "exclude": []
             }
         ]
+    },
+    {
+        "name": "flight-expert",
+        "repo_url": "https://github.com/jiwnchoi/flight-expert.git",
+        "branch": "main",
+        "copy_rules": [
+            {
+                "source": ".",
+                "dest": "skills/flight-expert",
+                "exclude": [
+                    ".git",
+                    ".github",
+                    ".gitignore",
+                    ".DS_Store"
+                ]
+            }
+        ]
     }
 ]
