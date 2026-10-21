@@ -1,63 +1,64 @@
 # AnySearch MCP 在 Devin 的部署记录
 
-> 记录 AnySearch 从 skill 切换到官方 MCP server 的部署方式与维护要点，以后改动有据可查。
-> 部署日期：2026-10-21。路径统一用 `~` 表示用户主目录。
+> 记录 AnySearch 接入 Devin 的方式演进与维护要点，以后改动有据可查。
+> 初版：2026-10-21（远程 HTTP 直连）；**2026-10-21 晚改为本地 stdio wrapper**。路径统一用 `~` 表示用户主目录。
 
 ## 背景与决策
 
 - 原先 AnySearch 以 skill 形式接入（`skills/anysearch-skill` → `~/.claude/skills`）。其 CLI 每次激活都要先找 `runtime.conf` 读 Runtime/Command，在其他项目里还要先定位 skill 目录，稳定浪费一轮交互。
-- 官方 MCP server 与 skill **同源**：skill 的 CLI 本质就是向 `https://api.anysearch.com/mcp` 发 JSON-RPC `tools/call`，两者能力完全一致（`search` / `batch_search` / `get_sub_domains` / `extract`）。
-- 决策：**只在 Devin 用户级装 MCP**，其他客户端未配 MCP，如需保留可重新链接 skill。
+- 第一阶段曾直连官方远程 MCP（`https://api.anysearch.com/mcp`，Streamable HTTP + Bearer）。**发现其 `tools/list` 下发的工具描述极度臃肿**——数千 token 的 sub_domain 决策流、GEO 向硬规则常驻上下文。
+- 远程 server 的工具描述**无法在客户端覆盖**，因此第二阶段改为**本地 stdio wrapper**：`scripts/mcp/anysearch_mcp.py` 重新声明同名工具但用精简 docstring，转发到与 skill CLI 相同的 REST 端点（`POST /v1/search`、`GET /v1/sub-domains`、`POST /v1/extract`）。
+- 顺带收益：API key 从 `mcp_config.json` 挪进 `scripts/mcp/.env`（gitignored），改 MCP 配置不再接触密钥。
 
-## 部署形态
+## 部署形态（当前生效）
 
-- 配置文件：`~/.config/devin/mcp_config.json`（Devin **用户级**，v3000.3 起 MCP 配置独立成文件，旧版在主 `config.json` 的 `mcpServers` 里会自动迁移）
-- 传输：Streamable HTTP，远程托管，**无本地安装包**
-- 配置内容（key 值已略去）：
+- 配置文件：`~/.config/devin/mcp_config.json`（Devin **用户级**），条目不包含任何密钥：
 
 ```json
-{
-  "mcpServers": {
-    "anysearch": {
-      "url": "https://api.anysearch.com/mcp",
-      "headers": {
-        "Authorization": "Bearer <ANYSEARCH_API_KEY>",
-        "X-Anysearch-Client": "mcp/1.0.0"
-      }
-    }
-  }
+"anysearch": {
+  "command": "uv",
+  "args": ["run", "<repo 绝对路径>/scripts/mcp/anysearch_mcp.py"]
 }
 ```
 
-- API key **明文存在用户级配置文件里**（该文件不进 git，与 `~/.claude.json` 信任级别相同）。`headers` 是否支持 `${env:VAR}`/`${file:path}` 引用未验证，故采用明文写入。
-- 生效时机：**新开会话才加载** MCP 配置，改动后需重启会话。
+- 传输：stdio（本地 `uv run` 拉起）；wrapper 内部走 HTTPS 调 `api.anysearch.com/v1/*`
+- 密钥：`scripts/mcp/.env` 中 `ANYSEARCH_API_KEY=`；查找优先级 `.env` > 环境变量，**无 key 则匿名模式**（低限流），与上游一致
+- 依赖：`mcp>=1.10,<2` + `httpx[socks]`，PEP 723 内联声明，uv 自动解析
+- 生效时机：**新开会话才加载** MCP 配置
 
-## 当时的部署流程（可复现）
+## 工具清单（精简描述版）
 
-1. 在 `mcp_config.json` 的 `mcpServers` 加 `anysearch` 条目（先无 key，匿名即可连通）
-2. key 通过 inbox 流程注入：用户把 key 写入 `~/.config/devin/anysearch-api-key.inbox` 第一行，再由脚本用 `jq` 写进 `headers.Authorization`（key 不经过对话），inbox 清空后移入 `~/.trash`
-3. 验证：`tools/list` + `tools/call get_sub_domains` 带 Bearer 返回真实数据（见下）
-4. 摘除 `~/.claude/skills/anysearch-skill` 符号链接 → `~/.trash`（仓库源文件保留）
+| 工具 | 说明 |
+|------|------|
+| `anysearch_search` | query + 可选 tag/params/zone/language/max_results；垂直查询先用 get_sub_domains 取 tag |
+| `anysearch_get_sub_domains` | 列 1-5 个 domain 的 sub_domain、描述、必需参数 |
+| `anysearch_batch_search` | 1-5 个独立查询并行（asyncio.gather） |
+| `anysearch_extract` | URL → 清洗正文，输出带 untrusted-content 警示头 |
+
+关键语义保留：结构化/垂直查询（ticker、专利、DOI、酒店等）必须先用 `get_sub_domains` 拿合法 `tag`（`<domain>.<sub_domain>`）和 `params`，不允许瞎猜 tag——这是原版描述里唯一值得保留的硬规则。
 
 ## 维护操作
 
 ```bash
-# 匿名连通性测试（无需 key）
-curl -sS -X POST https://api.anysearch.com/mcp \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+# 冒烟测试（initialize + tools/list + 真实调用）
+cd <repo> && (printf '%s\n%s\n%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"anysearch_search","arguments":{"query":"test","max_results":3}}}' \
+; sleep 20) | timeout 40 uv run scripts/mcp/anysearch_mcp.py
 
-# 换 key：直接改 mcp_config.json 里 headers.Authorization 即可；inbox 流程可复用
-# 停用：条目加 "disabled": true；删除：整条移除
-# 若装了 devin CLI 也可用: devin mcp list / disable / remove（注意本机 devin 不在 PATH）
+# 换 key：编辑 scripts/mcp/.env 里的 ANYSEARCH_API_KEY
+# 停用：mcp_config.json 条目加 "disabled": true
 ```
+
+注意：stdio 冒烟测试时 **stdin 不能提前 EOF**——上面用 `sleep` 挂住 stdin，否则服务端可能在响应写出前就退出。
 
 ## 注意事项
 
-- **匿名可用但限流低**；免费 key 在 https://anysearch.com/console/api-keys 申请
-- `X-Anysearch-Client: mcp/1.0.0` 是官方建议的标识头，保留
-- 仓库内 `skills/anysearch-skill/` 仍在（含 `.env` 旧 key 已过期、`runtime.conf` 指向本仓库路径）——若哪天回链 skill，记得换 `.env` 里的 key
-- 上游 skill 更新与本 MCP 部署解耦：`sync_skills.sh` 照常同步 anysearch 源，互不影响
-- 官方仓库：`anysearch-ai/anysearch-mcp-server`（Apache 2.0）；mcp.so / Glama / Smithery 有收录
-- 其他客户端要接 MCP：`~/.claude.json`（Claude Code）、`~/.codex/config.toml`、`~/.gemini/settings.json` 均支持同类 HTTP server 配置，key 处理方式相同
+- 免费 key：https://anysearch.com/console/api-keys
+- `X-Anysearch-Client: antigravity-mcp/1.0`（自建标识，官方原版是 `mcp/1.0.0`/`skill/3.1.1`）
+- `scripts/mcp/.env` 被仓库 `.gitignore` 的 `*.env` 规则覆盖，不提交；`.env.example` 同理仅作本地模板
+- 仓库内 `skills/anysearch-skill/` 仍在（含过期旧 key 的 `.env`）——若回链 skill 记得换 key；skill 上游更新与本 wrapper 解耦
+- `mcp<2` 是硬约束（2.x API 大改），升级依赖前先改代码
+- 官方远程 MCP（`api.anysearch.com/mcp`）仍可用，若上游哪天精简了工具描述可直接切回 HTTP 条目
+- 其他客户端要接同款：`~/.claude.json`、`~/.codex/config.toml`、`~/.gemini/settings.json` 用相同 `command/args` 形式条目
