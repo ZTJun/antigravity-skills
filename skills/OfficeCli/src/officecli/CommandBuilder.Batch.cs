@@ -23,6 +23,9 @@ static partial class CommandBuilder
         + "\"path\" (set/remove/get target), \"selector\" (query filter; \"path\" is accepted as an alias), \"type\" (element type for add), "
         + "\"props\" (a key->value map of --prop values), \"to\"/\"after\"/\"before\" (move), "
         + "\"path2\" (swap's second path).\n\n"
+        + "A query item also takes its own output options as fields: \"compact\" (true = one line per element, "
+        + "the same format as `query --compact`) and \"fields\" (extra k=v columns, only with compact). "
+        + "A read item does not read \"props\" — putting an option there warns and the option is ignored.\n\n"
         + "Pass the array via --commands, or as the same JSON on stdin / --input <file>. Example:\n"
         + "[\n"
         + "  {\"command\":\"add\",\"parent\":\"/slide[1]\",\"type\":\"shape\",\"props\":{\"text\":\"Hi\",\"x\":\"1cm\",\"y\":\"2cm\"}},\n"
@@ -65,6 +68,15 @@ static partial class CommandBuilder
         ICollection<string>? unrecognizedLatex = null)
     {
         var results = new List<BatchResult>();
+        // Cross-document numbering replay (issue #404): give source list
+        // definitions whose ids the target already uses fresh ids, and
+        // rewrite this batch's references to them. All batch transports
+        // (CLI, resident, SDK executor) funnel through here.
+        if (handler is OfficeCli.Handlers.WordHandler numWord)
+        {
+            var (absIds, numIds) = numWord.GetNumberingDefinitionIds();
+            OfficeCli.Core.BatchCompat.RemapNumberingIds(items, absIds, numIds);
+        }
         for (int bi = 0; bi < items.Count; bi++)
         {
             var item = items[bi];
@@ -77,14 +89,47 @@ static partial class CommandBuilder
                     continue;
                 }
             }
+            // Batch dispatches straight to the shared handler methods, bypassing
+            // the standalone add/set wrappers that normally drain warnings into
+            // their output envelope. Capture a fresh warning scope per item so
+            // diagnostics retain the step that produced them.
+            OfficeCli.Core.WarningContext.Begin();
             try
             {
                 var output = ExecuteBatchItem(handler, item, json);
-                results.Add(new BatchResult { Index = bi, Success = true, Output = output });
+                var warnings = OfficeCli.Core.WarningContext.End();
+                if (handler is OfficeCli.Handlers.WordHandler word)
+                {
+                    // Word advisories live on the handler rather than in
+                    // WarningContext; standalone add/set merge these explicitly.
+                    var advisory = string.Equals(item.Command, "add", StringComparison.OrdinalIgnoreCase)
+                        ? word.LastAddWarnings
+                        : string.Equals(item.Command, "set", StringComparison.OrdinalIgnoreCase)
+                            ? word.LastSetWarnings
+                            : null;
+                    if (advisory is { Count: > 0 })
+                    {
+                        warnings ??= new List<OfficeCli.Core.CliWarning>();
+                        warnings.AddRange(advisory.Select(message => new OfficeCli.Core.CliWarning
+                        {
+                            Message = message,
+                            Code = "advisory",
+                        }));
+                    }
+                }
+                results.Add(new BatchResult { Index = bi, Success = true, Output = output, Warnings = warnings });
             }
             catch (Exception ex)
             {
-                results.Add(new BatchResult { Index = bi, Success = false, Item = item, Error = ex.Message, Code = OfficeCli.Core.OutputFormatter.InferErrorCode(ex) });
+                results.Add(new BatchResult
+                {
+                    Index = bi,
+                    Success = false,
+                    Item = item,
+                    Error = ex.Message,
+                    Code = OfficeCli.Core.OutputFormatter.InferErrorCode(ex),
+                    Warnings = OfficeCli.Core.WarningContext.End(),
+                });
                 if (stopOnError) break;
             }
             // BUG-BT2: per-item unrecognized-LaTeX diagnostics. The handler
@@ -186,26 +231,28 @@ static partial class CommandBuilder
             // /dev/null redirect) with zero length carries no second payload
             // — skip the warning. Pipes (CanSeek=false) still warn: someone
             // is actively piping data that will be ignored.
-            bool stdinHasInput = Console.IsInputRedirected;
-            if (stdinHasInput)
+            // #340/#339: the warning below only needs to know whether a SECOND
+            // payload is sitting on stdin while --commands/--input is also given.
+            // The old refinement peeked a byte off stdin — but under `officecli
+            // mcp` stdin IS the JSON-RPC channel, and that consuming read (on an
+            // abandoned thread) swallowed the next request frame, so the client
+            // hung with no response. Determine it WITHOUT consuming: only a
+            // seekable stdin can be sized without reading. This makes the warning
+            // best-effort — most hosts expose redirected stdin as a non-seekable
+            // stream (Console.OpenStandardInput().CanSeek == false for pipes AND,
+            // on several platforms, for `< file` too), and those are deliberately
+            // left unconfirmed rather than consumed. Never swallowing a frame
+            // matters more than the warning. The actual stdin payload path below
+            // still reads stdin in full when batch has no explicit source.
+            bool stdinHasInput = false;
+            if (Console.IsInputRedirected)
             {
-                // Peek with a short timeout: /dev/null and closed stdin hit
-                // EOF instantly (no payload → no warning); a pipe carrying a
-                // real second payload has data ready (warn); an open-but-idle
-                // pipe times out and is treated as no payload — batch never
-                // reads stdin on this path anyway, so nothing is lost. The
-                // possibly-blocked Peek thread is abandoned; the process
-                // exits normally.
                 try
                 {
-                    var stdinPeek = System.Threading.Tasks.Task.Run(() =>
-                    {
-                        try { return StdIn.Peek() != -1; }
-                        catch { return false; }
-                    });
-                    stdinHasInput = stdinPeek.Wait(TimeSpan.FromMilliseconds(50)) && stdinPeek.Result;
+                    var probe = Console.OpenStandardInput(); // metadata only; never read/disposed
+                    stdinHasInput = probe.CanSeek && probe.Length > 0;
                 }
-                catch { /* keep IsInputRedirected verdict */ }
+                catch { /* treat as no confirmed payload */ }
             }
             if (inlineCommands != null && inputFile != null)
                 throw new ArgumentException(
@@ -237,7 +284,7 @@ static partial class CommandBuilder
                 // skipped on purpose — '-' is not a path.)
                 if (inputFile.Name == "-")
                 {
-                    jsonText = StripBom(StdIn.ReadToEnd());
+                    jsonText = ReadStdInPayload("batch", BatchPayloadFlags);
                 }
                 else
                 {
@@ -256,7 +303,7 @@ static partial class CommandBuilder
                 // System.Text.Json.Parse with "'﻿' is an invalid start of
                 // a value" while `batch --input utf8bom.json` succeeded —
                 // splitting the contract on the input source.
-                jsonText = StripBom(StdIn.ReadToEnd());
+                jsonText = ReadStdInPayload("batch", BatchPayloadFlags);
             }
 
             // Pre-validate: check for unknown JSON fields before deserializing
@@ -584,7 +631,7 @@ static partial class CommandBuilder
                     // temp copy must not leak on that path.
                     try
                     {
-                        System.IO.File.Replace(tmpPath, targetPath, destinationBackupFileName: null);
+                        OfficeCli.Core.AtomicPackageWriter.ReplaceFile(tmpPath, targetPath);
                     }
                     catch
                     {
@@ -693,6 +740,25 @@ static partial class CommandBuilder
             : Console.In);
 
     internal static TextReader StdIn => LazyStdIn.Value;
+
+    /// <summary>
+    /// Read a whole piped payload (batch JSON, import CSV/TSV) from stdin.
+    ///
+    /// Under `officecli mcp` stdin is the JSON-RPC channel, which the client
+    /// keeps open for the whole session: ReadToEnd would wait for an EOF that
+    /// never comes, and because commands run on the server's request loop,
+    /// every later request would go unanswered. Refuse instead, naming the
+    /// flag that carries the payload (<paramref name="useInstead"/>).
+    /// </summary>
+    private const string BatchPayloadFlags = "Pass the JSON array via --commands '<json>' or --input <file>.";
+
+    internal static string ReadStdInPayload(string verb, string useInstead)
+    {
+        if (McpServer.InMcpMode)
+            throw new ArgumentException(
+                $"{verb}: cannot read from stdin under MCP (stdin is the JSON-RPC channel). {useInstead}");
+        return StripBom(StdIn.ReadToEnd());
+    }
 
     /// <summary>
     /// The atomic temp name adds ~45 bytes of affixes around the document's

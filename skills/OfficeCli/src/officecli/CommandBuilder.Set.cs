@@ -40,6 +40,14 @@ static partial class CommandBuilder
             var file = result.GetValue(setFileArg)!;
             var path = MsysPathHint.Restore(result.GetValue(setPathArg)!)!;
             var props = result.GetValue(propsOpt);
+            // TreatUnmatchedTokensAsErrors=false lets a bare key=value be
+            // reported as a missing --prop; anything else that is unmatched is
+            // an unknown option and must not vanish with exit 0 (add already
+            // does both — set did neither).
+            var setUnmatchedKv = DetectUnmatchedKeyValues(result);
+            foreach (var kv in setUnmatchedKv)
+                Console.Error.WriteLine($"WARNING: Bare property '{kv}' ignored. Did you mean: --prop {kv}");
+            RejectUnknownOptionTokens(result, setUnmatchedKv);
             var findFlag = result.GetValue(findOpt);
             var replaceFlag = result.GetValue(replaceOpt);
             var force = result.GetValue(forceOption);
@@ -216,6 +224,7 @@ static partial class CommandBuilder
             var properties = ParsePropsArray(props);
 
             using var handler = DocumentHandlerFactory.Open(file.FullName, editable: true);
+            using var deferredOut = OfficeCli.Core.DeferredStdout.Begin(handler); // #493: print only after the save lands
 
             // Scope the unsupported-prop fuzzy-suggestion pool by handler type
             // so e.g. Excel pivot errors don't suggest PPTX-only keys like

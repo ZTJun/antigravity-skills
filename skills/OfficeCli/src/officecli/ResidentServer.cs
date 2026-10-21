@@ -210,8 +210,25 @@ public class ResidentServer : IDisposable
     // PromoteToEditable(); the promotion is sticky for the resident's
     // lifetime, matching the pre-existing reopen pattern used by
     // view-screenshot/page-count/refresh.
+    // When this resident started — written into the dirty marker so a later
+    // reader can tell a dead owner from a reused pid.
+    private readonly DateTime _startedUtc = DateTime.UtcNow;
+
+    /// <summary>
+    /// Single writer for <see cref="_dirty"/>: the clean→dirty edge writes the
+    /// on-disk marker, every clean edge removes it (issue #328).
+    /// </summary>
+    private void SetDirty(bool dirty)
+    {
+        var was = _dirty;
+        _dirty = dirty;
+        if (dirty && !was) ResidentDirtyMarker.Write(_filePath, _startedUtc);
+        else if (!dirty && was) ResidentDirtyMarker.Clear(_filePath);
+    }
+
     public ResidentServer(string filePath, bool editable = false)
     {
+        ResidentDirtyMarker.SweepStale();
         _filePath = Path.GetFullPath(filePath);
         _pipeName = GetPipeName(_filePath);
         _editable = editable;
@@ -513,7 +530,7 @@ public class ResidentServer : IDisposable
             }
             else
             {
-                _dirty = false;
+                SetDirty(false);
                 LogStderr($"Autosaved {Path.GetFileName(_filePath)} (idle flush, resident still running).");
             }
         }
@@ -604,7 +621,11 @@ public class ResidentServer : IDisposable
 
             if (request.Command == "__ping__")
             {
-                var response = MakeResponse(0, _filePath, "");
+                // The ack carries this resident's binary version so a client built
+                // from a newer binary (after an in-place auto-update) retires it
+                // instead of talking to a process whose bundle was replaced
+                // underneath it (issue #489).
+                var response = MakeResponse(0, _filePath, Core.UpdateChecker.GetCurrentVersionPublic() ?? "");
                 await WriteLineToPipeAsync(accepted, response, token);
                 return;
             }
@@ -797,7 +818,7 @@ public class ResidentServer : IDisposable
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     _handler.Save();
                     sw.Stop();
-                    _dirty = false;
+                    SetDirty(false);
                     RecordSaveDuration(sw.Elapsed);
                 }
             }
@@ -818,6 +839,15 @@ public class ResidentServer : IDisposable
             var isBatch = request.Command.Equals("batch", StringComparison.OrdinalIgnoreCase);
             var batchFailure = isBatch && _lastBatchHadFailure;
 
+            // A failed refresh writes its reason to stderr and returns; the
+            // generic stderr inspection below finds no token in it, so text
+            // mode used to answer exit 0 for a refresh that did not happen.
+            // ExecuteRefresh records the verdict in _lastRefreshFailed (reset
+            // at the start of every refresh), so both modes agree with the
+            // one-shot path — see the field's declaration.
+            var isRefresh = request.Command.Equals("refresh", StringComparison.OrdinalIgnoreCase);
+            var refreshFailure = isRefresh && _lastRefreshFailed;
+
             // BUG-INTERVIEW-EDIT-R2: batch text-mode envelope is written by
             // the client via Console.Write (not WriteLine) to avoid double-
             // newlining single-command output. Without a trailing '\n' on
@@ -832,6 +862,11 @@ public class ResidentServer : IDisposable
             var isValidate = request.Command.Equals("validate", StringComparison.OrdinalIgnoreCase);
             var validateFailure = isValidate && _lastValidateErrorCount > 0;
             if (isValidate) _lastValidateErrorCount = 0;
+            // raw-set / add-part applied but introduced validator errors:
+            // "applied with caveats" → exit 2, alongside UNSUPPORTED. Read and
+            // clear per request so a caveat never leaks into the next command.
+            var rawCaveats = _lastRawMutationHadValidationCaveats;
+            _lastRawMutationHadValidationCaveats = false;
 
             if (request.Json)
             {
@@ -879,24 +914,24 @@ public class ResidentServer : IDisposable
                 // something was applied when nothing was. Single-command
                 // marker precedence (all-unsupported set → 2) is unchanged.
                 int jsonExitCode = 0;
-                if (batchFailure || validateFailure)
+                if (batchFailure || validateFailure || refreshFailure)
                     jsonExitCode = 1;
-                else if (stderr.Contains("UNSUPPORTED") || stderr.Contains(UnrecognizedLatexMarker))
+                else if (rawCaveats || stderr.Contains("UNSUPPORTED") || stderr.Contains(UnrecognizedLatexMarker))
                     jsonExitCode = 2;
-                else if (!EnvelopeSuccess(envelope) || stderr.Contains("VALIDATION:"))
+                else if (!EnvelopeSuccess(envelope))
                     jsonExitCode = 1;
                 return MakeResponse(jsonExitCode, envelope, "");
             }
 
-            // BUG-DUMP12-01: surface stderr "VALIDATION:" token (emitted by
-            // ExecuteRawSet / ExecuteAddPart when the SDK validator gains new
-            // errors) as exit 1 so callers can detect rejected raw mutations.
-            // Batch/validate verdict failures outrank applied-with-caveats
-            // markers (mirrors the non-resident batch path); single-command
-            // marker precedence is unchanged.
-            int exitCode = (batchFailure || validateFailure) ? 1
-                : ((stderr.Contains("UNSUPPORTED") || stderr.Contains(UnrecognizedLatexMarker)) ? 2
-                : (stderr.Contains("VALIDATION:") ? 1 : 0));
+            // Text mode: batch/validate verdict failures (1) outrank the
+            // applied-with-caveats markers (2): UNSUPPORTED, unrecognized
+            // LaTeX, and a raw-set / add-part that introduced validator
+            // errors (rawCaveats — the mutation is applied, see
+            // ReportRawMutationOutcome; exit 1 here made callers retry and
+            // duplicate content, issue #374).
+            int exitCode = (batchFailure || validateFailure || refreshFailure) ? 1
+                : ((rawCaveats || stderr.Contains("UNSUPPORTED") || stderr.Contains(UnrecognizedLatexMarker)) ? 2
+                : 0);
             return MakeResponse(exitCode, stdout, stderr);
         }
         catch (Exception ex)
@@ -1071,7 +1106,7 @@ public class ResidentServer : IDisposable
         // Mark the in-memory DOM as having unflushed changes. Cleared by the
         // next save/close/idle-autosave. Set here (the shared mutation prelude)
         // so single commands and batch alike are tracked.
-        _dirty = true;
+        SetDirty(true);
     }
 
     private void ExecuteCommand(ResidentRequest request)
@@ -1090,6 +1125,10 @@ public class ResidentServer : IDisposable
                 ExecuteQuery(request, format);
                 break;
             case "set":
+                // Reject missing Excel sheets before promotion latches _dirty;
+                // otherwise save/idle-autosave can rewrite an untouched file.
+                if (_handler is ExcelHandler excel)
+                    excel.ValidateSetSheet(request.GetArg("path"));
                 PromoteToEditable();
                 ExecuteSet(request);
                 NotifyWatchSlideChanged(request.GetArg("path"));
@@ -1266,7 +1305,7 @@ public class ResidentServer : IDisposable
             var swBarrier = System.Diagnostics.Stopwatch.StartNew();
             _handler.Save();
             swBarrier.Stop();
-            _dirty = false;
+            SetDirty(false);
             RecordSaveDuration(swBarrier.Elapsed);
         }
         if (hasMutating) PromoteToEditable();
@@ -1338,7 +1377,7 @@ public class ResidentServer : IDisposable
                 wh2.DeferSave = true;
                 wh2.AdoptPendingWholeParts(preBatchWholeParts);
             }
-            _dirty = false;
+            SetDirty(false);
             rolledBack = true;
         }
 
@@ -1597,6 +1636,7 @@ public class ResidentServer : IDisposable
                 int pptGridCols = gridCols < 0
                     ? OfficeCli.Core.HtmlScreenshot.AutoGridColumns((pEnd ?? pptShotHandler.GetSlideCount()) - (pStart ?? 1) + 1, nativeW, nativeH)
                     : gridCols;
+                OfficeCli.Core.NativeRenderFailure? nativeFailure = null;
                 if (renderMode != "html" && OperatingSystem.IsWindows())
                 {
                     // A read-only handler holds only read access with FileShare.ReadWrite,
@@ -1617,10 +1657,10 @@ public class ResidentServer : IDisposable
                     try
                     {
                         directPng = pptGridCols > 0
-                            ? OfficeCli.Core.PowerPointPngBackend.RenderGrid(_filePath, ps, gEnd, gCellW, gCellH, pptGridCols, gGap, gPad)
-                            : OfficeCli.Core.PowerPointPngBackend.Render(_filePath, ps, pEnd ?? ps, exportW, exportH);
+                            ? OfficeCli.Core.PowerPointPngBackend.RenderGrid(_filePath, ps, gEnd, gCellW, gCellH, pptGridCols, gGap, gPad, out nativeFailure)
+                            : OfficeCli.Core.PowerPointPngBackend.Render(_filePath, ps, pEnd ?? ps, exportW, exportH, out nativeFailure);
                     }
-                    catch { directPng = null; }
+                    catch (Exception ex) { directPng = null; nativeFailure = OfficeCli.Core.NativeRenderFailure.FromException(ex); }
                     if (_editable)
                     {
                         _handler = OfficeCli.Handlers.DocumentHandlerFactory.Open(_filePath, _editable);
@@ -1628,10 +1668,7 @@ public class ResidentServer : IDisposable
                     }
                 }
                 if (renderMode == "native" && directPng == null)
-                {
-                    Console.Error.WriteLine("--render native requires Windows with Microsoft PowerPoint installed.");
-                    return;
-                }
+                    throw OfficeCli.Core.NativeRenderFailure.ToCliException("PowerPoint", nativeFailure);
                 if (directPng == null)
                 {
                     html = CommandBuilder.RenderViaRegistry(pptShotHandler, "pptx", new OfficeCli.Core.Rendering.RenderOptions
@@ -1646,7 +1683,7 @@ public class ResidentServer : IDisposable
                 }
             }
             else if (_handler is OfficeCli.Handlers.ExcelHandler excelShotHandler)
-                html = CommandBuilder.RenderViaRegistry(excelShotHandler, "xlsx", new OfficeCli.Core.Rendering.RenderOptions())!;
+                html = CommandBuilder.RenderViaRegistry(excelShotHandler, "xlsx", new OfficeCli.Core.Rendering.RenderOptions { CellRange = rangeArg })!;
             else if (_handler is OfficeCli.Handlers.WordHandler wordShotGrid && gridCols != 0)
             {
                 // Contact-sheet grid — mirrors CommandBuilder.View.cs's docx grid
@@ -1675,11 +1712,12 @@ public class ResidentServer : IDisposable
                 // Native-first on Windows: release an editable write lock (blocks
                 // Word) before rendering, then reopen — same dance as the single-page
                 // branch below.
+                OfficeCli.Core.NativeRenderFailure? nativeFailure = null;
                 if (renderMode != "html" && OperatingSystem.IsWindows())
                 {
                     if (_editable) _handler.Dispose();
-                    try { directPng = OfficeCli.Core.WordPdfBackend.RenderGrid(_filePath, $"1-{gPageCount}", (int)Math.Round(gCellW), (int)Math.Round(gCellH), gCols, gGap, gPad); }
-                    catch { directPng = null; }
+                    try { directPng = OfficeCli.Core.WordPdfBackend.RenderGrid(_filePath, $"1-{gPageCount}", (int)Math.Round(gCellW), (int)Math.Round(gCellH), gCols, gGap, gPad, out nativeFailure); }
+                    catch (Exception ex) { directPng = null; nativeFailure = OfficeCli.Core.NativeRenderFailure.FromException(ex); }
                     if (_editable)
                     {
                         _handler = OfficeCli.Handlers.DocumentHandlerFactory.Open(_filePath, _editable);
@@ -1687,10 +1725,7 @@ public class ResidentServer : IDisposable
                     }
                 }
                 if (renderMode == "native" && directPng == null)
-                {
-                    Console.Error.WriteLine("--render native requires Windows with Microsoft Word installed.");
-                    return;
-                }
+                    throw OfficeCli.Core.NativeRenderFailure.ToCliException("Word", nativeFailure);
                 if (directPng == null)
                 {
                     html = CommandBuilder.RenderViaRegistry(wordShotGrid, "docx", new OfficeCli.Core.Rendering.RenderOptions
@@ -1704,6 +1739,7 @@ public class ResidentServer : IDisposable
                 var effectiveFilter = rangeArg != null
                     ? pageFilter
                     : (string.IsNullOrEmpty(pageFilter) ? "1" : pageFilter);
+                OfficeCli.Core.NativeRenderFailure? nativeFailure = null;
                 if (renderMode != "html" && OperatingSystem.IsWindows())
                 {
                     // See the pptx branch: only an editable handler must be released
@@ -1711,7 +1747,8 @@ public class ResidentServer : IDisposable
                     if (_editable) _handler.Dispose();
                     // effectiveFilter is only null under --range, which forces
                     // renderMode=html — this native branch is then unreachable.
-                    try { directPng = OfficeCli.Core.WordPdfBackend.Render(_filePath, effectiveFilter!); } catch { directPng = null; }
+                    try { directPng = OfficeCli.Core.WordPdfBackend.Render(_filePath, effectiveFilter!, out nativeFailure); }
+                    catch (Exception ex) { directPng = null; nativeFailure = OfficeCli.Core.NativeRenderFailure.FromException(ex); }
                     if (_editable)
                     {
                         _handler = OfficeCli.Handlers.DocumentHandlerFactory.Open(_filePath, _editable);
@@ -1719,10 +1756,7 @@ public class ResidentServer : IDisposable
                     }
                 }
                 if (renderMode == "native" && directPng == null)
-                {
-                    Console.Error.WriteLine("--render native requires Windows with Microsoft Word installed.");
-                    return;
-                }
+                    throw OfficeCli.Core.NativeRenderFailure.ToCliException("Word", nativeFailure);
                 if (directPng == null) html = CommandBuilder.RenderViaRegistry(wordShotHandler, "docx",
                     new OfficeCli.Core.Rendering.RenderOptions { PageFilter = effectiveFilter })!;
             }
@@ -2404,10 +2438,21 @@ public class ResidentServer : IDisposable
         Console.WriteLine($"Moved to {resultPath}");
     }
 
+    // A refresh that fails reports the failure on stderr and returns — it does
+    // not throw, because the handler is reopened either way and the resident
+    // has to stay usable. None of that text is a token the generic stderr
+    // inspection in ProcessRequest looks for, so text mode answered exit 0 for
+    // a refresh that failed (the one-shot path and the JSON envelope both say
+    // 1). Record the verdict here; ProcessRequest reads it and promotes it to a
+    // non-zero exit, exactly as ExecuteBatch / ExecuteValidate do.
+    private bool _lastRefreshFailed;
+
     private void ExecuteRefresh(ResidentRequest req)
     {
+        _lastRefreshFailed = false;
         if (_handler is not OfficeCli.Handlers.WordHandler)
         {
+            _lastRefreshFailed = true;
             Console.Error.WriteLine("refresh currently only supports .docx files.");
             return;
         }
@@ -2427,6 +2472,7 @@ public class ResidentServer : IDisposable
         _handler = OfficeCli.Handlers.DocumentHandlerFactory.Open(_filePath, _editable);
         if (!ok)
         {
+            _lastRefreshFailed = true;
             Console.Error.WriteLine("refresh failed (Word backend unavailable and HTML fallback failed).");
             return;
         }
@@ -2478,23 +2524,7 @@ public class ResidentServer : IDisposable
 
         var errorsBefore = _handler.Validate().Select(e => e.Description).ToHashSet();
         _handler.RawSet(partPath, xpath, action, xml);
-
-        var errorsAfter = _handler.Validate();
-        var newErrors = errorsAfter.Where(e => !errorsBefore.Contains(e.Description)).ToList();
-        if (newErrors.Count > 0)
-        {
-            // BUG-DUMP12-01: emit VALIDATION report to stderr (not stdout) so the
-            // ProcessRequest exit-code logic — which checks stderr for failure
-            // tokens — promotes the request to a non-zero exit code. Writing to
-            // stdout also corrupted batch --json output (BUG-R5-01 rationale).
-            Console.Error.WriteLine($"VALIDATION: {newErrors.Count} new error(s) introduced:");
-            foreach (var err in newErrors)
-            {
-                Console.Error.WriteLine($"  [{err.ErrorType}] {err.Description}");
-                if (err.Path != null) Console.Error.WriteLine($"    Path: {err.Path}");
-                if (err.Part != null) Console.Error.WriteLine($"    Part: {err.Part}");
-            }
-        }
+        ReportRawMutationOutcome(req, $"raw-set applied: {action} at {xpath}", errorsBefore);
     }
 
     private void ExecuteAddPart(ResidentRequest req)
@@ -2503,23 +2533,38 @@ public class ResidentServer : IDisposable
         var type = req.GetArg("type", "");
         var errorsBefore = _handler.Validate().Select(e => e.Description).ToHashSet();
         var (relId, partPath) = _handler.AddPart(parent, type);
-        Console.WriteLine($"Created {type} part: relId={relId} path={partPath}");
+        ReportRawMutationOutcome(req, $"Created {type} part: relId={relId} path={partPath}", errorsBefore);
+    }
 
-        var errorsAfter = _handler.Validate();
-        var newErrors = errorsAfter.Where(e => !errorsBefore.Contains(e.Description)).ToList();
-        if (newErrors.Count > 0)
+    // Shared tail of raw-set / add-part. Mirrors CommandBuilder.Raw.cs so the
+    // resident and one-shot paths emit the same envelope for the same outcome:
+    // the mutation is APPLIED even when the SDK validator gains new errors
+    // (the validator is advisory — it flags element order Word itself opens
+    // fine — and raw-set is the escape hatch, so it never rolls back). The
+    // caveat rides as validation_error warnings on a success:true envelope
+    // and the request exits 2 ("applied with caveats", the unsupported_property
+    // code). Issue #374: this path used to leave stdout empty and print the
+    // report to stderr, which the dispatcher turned into success:false / exit 1
+    // — a retry signal — so callers re-issued the write and duplicated content.
+    private void ReportRawMutationOutcome(ResidentRequest req, string message, HashSet<string> errorsBefore)
+    {
+        var warnings = CommandBuilder.ReportNewErrorsAsWarnings(_handler, errorsBefore);
+        if (warnings is { Count: > 0 }) _lastRawMutationHadValidationCaveats = true;
+        if (req.Json)
         {
-            // BUG-DUMP12-01: route VALIDATION report to stderr — see ExecuteRawSet
-            // for rationale (mirrors CommandBuilder.ReportNewErrors and lets the
-            // ProcessRequest exit-code logic promote the request to exit 1).
-            Console.Error.WriteLine($"VALIDATION: {newErrors.Count} new error(s) introduced:");
-            foreach (var err in newErrors)
-            {
-                Console.Error.WriteLine($"  [{err.ErrorType}] {err.Description}");
-                if (err.Path != null) Console.Error.WriteLine($"    Path: {err.Path}");
-                if (err.Part != null) Console.Error.WriteLine($"    Part: {err.Part}");
-            }
+            // Full envelope here; nothing on stderr, or the dispatcher's
+            // BuildWarnings would merge a second copy of every line.
+            Console.WriteLine(OutputFormatter.WrapEnvelopeText(message, warnings));
+            return;
         }
+        Console.WriteLine(message);
+        if (warnings is not { Count: > 0 }) return;
+        // Text mode keeps the report on stderr (BUG-DUMP12-01: stdout would
+        // corrupt batch --json output); exit 2 comes from the flag, not from
+        // the dispatcher grepping this text.
+        Console.Error.WriteLine($"VALIDATION: {warnings.Count} new error(s) introduced:");
+        foreach (var w in warnings)
+            Console.Error.WriteLine($"  {w.Message}");
     }
 
     // R7-bt-3 / R7-bt-4: validate exit code & stream destination.
@@ -2530,6 +2575,11 @@ public class ResidentServer : IDisposable
     // to a non-zero exit code, and write the failure report to stderr —
     // mirrors the standard convention for diagnostic / lint tools.
     private int _lastValidateErrorCount;
+
+    // Set by ReportRawMutationOutcome when raw-set / add-part applied but the
+    // SDK validator gained new errors; ProcessRequest reads+clears it and maps
+    // the request to exit 2 (applied with caveats), never 1.
+    private bool _lastRawMutationHadValidationCaveats;
 
     private void ExecuteValidate()
     {
@@ -2576,7 +2626,7 @@ public class ResidentServer : IDisposable
         var sw = System.Diagnostics.Stopwatch.StartNew();
         _handler.Save();
         sw.Stop();
-        _dirty = false;
+        SetDirty(false);
         RecordSaveDuration(sw.Elapsed);
         Console.WriteLine($"Saved {Path.GetFileName(_filePath)}");
     }
@@ -2776,6 +2826,10 @@ public class ResidentServer : IDisposable
             disposeFailed = true;
             LogStderr($"Warning: handler dispose error: {ex.Message}");
         }
+        // The final flush landed (or nothing was pending): the dirty marker
+        // has served its purpose. Left in place only when the flush itself
+        // failed — then the edits really may be gone.
+        if (!disposeFailed) SetDirty(false);
 
         // BUG-BT-R26-2 / BUG-R43: detect data loss. The original probe used
         // File.Exists(_filePath) post-Dispose — but on macOS, renaming the

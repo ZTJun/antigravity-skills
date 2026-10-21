@@ -1215,11 +1215,9 @@ internal static partial class ChartHelper
         {
             dLbl = new C.DataLabel();
             dLbl.AppendChild(new C.Index { Val = ooxmlIdx });
-            var insertBefore = dLbls.GetFirstChild<C.ShowLegendKey>() as OpenXmlElement
-                ?? dLbls.GetFirstChild<C.ShowValue>()
-                ?? dLbls.FirstChild;
-            if (insertBefore != null) dLbls.InsertBefore(dLbl, insertBefore);
-            else dLbls.AppendChild(dLbl);
+            // dLbl leads CT_DLbls — same canonical position as the
+            // dataLabel{N}.x/y/w/h path so both routes agree.
+            InsertDLblsChildInOrder(dLbls, dLbl);
         }
 
         switch (prop)
@@ -1423,6 +1421,13 @@ internal static partial class ChartHelper
     /// </summary>
     internal static void InsertChartGroupDLbls(OpenXmlElement chartGroup, C.DataLabels dLbls)
     {
+        // In every chart-group type (CT_BarChart, CT_LineChart, CT_PieChart,
+        // CT_ScatterChart, …) dLbls? immediately follows ser*. Anchor on the
+        // last series: the before-anchor chain below missed CT_LineChart's
+        // group-level <c:smooth>, so a later `set dataLabels` on a line chart
+        // landed dLbls after smooth — schema-invalid (#498).
+        var lastSer = chartGroup.ChildElements.LastOrDefault(e => e.LocalName == "ser");
+        if (lastSer != null) { lastSer.InsertAfterSelf(dLbls); return; }
         var anchor = chartGroup.GetFirstChild<C.DropLines>() as OpenXmlElement
             ?? chartGroup.GetFirstChild<C.HighLowLines>() as OpenXmlElement
             ?? chartGroup.GetFirstChild<C.UpDownBars>() as OpenXmlElement

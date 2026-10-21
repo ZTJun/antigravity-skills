@@ -744,7 +744,7 @@ internal static class AttributeFilter
         // past ~7.9e28, which made `[Amount>1e200]` a no-match while
         // `[Amount=1e300]` still hit via the string-equality fallback —
         // wrong answers with no warning. Non-finite parses (1e999) stay null.
-        return double.TryParse(trimmed, NumberStyles.Any, CultureInfo.InvariantCulture, out var n)
+        return NumericText.TryParse(trimmed, out var n)
             && double.IsFinite(n) ? n : null;
     }
 
@@ -912,6 +912,133 @@ internal static class AttributeFilter
             int.TryParse(m.Groups[1].Value.Trim(), out _) ? m.Value : "");
 
     /// <summary>
+    /// Index of the top-level `>` child combinator, or -1 when the selector has
+    /// none. Mirrors the handlers' own split (WordHandler.SplitChildCombinator):
+    /// a `>` inside a predicate bracket is comparison text
+    /// (`paragraph[size>=14pt] > run`), never a combinator, so only a
+    /// bracket-depth-0 `>` splits.
+    /// </summary>
+    private static int ChildCombinatorIndex(string selector)
+    {
+        int depth = 0;
+        for (int i = 0; i < selector.Length; i++)
+        {
+            switch (selector[i])
+            {
+                case '[': depth++; break;
+                case ']': depth--; break;
+                case '>' when depth == 0: return i;
+            }
+        }
+        return -1;
+    }
+
+    // The handlers' own selector grammar (WordHandler.ParseSingleSelector):
+    // a bracket reaches the handler's gate only when it is
+    // `[@]key=value` / `[@]key!=value` with a word key. Comparison ops
+    // (`>`, `>=`, `<`, `<=`, `~=`), a bare exists bracket and a dotted key are
+    // never captured, so the handler gates nothing for them.
+    private static readonly Regex HandlerGatedBracketRegex = new(
+        @"@?\w+(!=|=)[^\]]+", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The parent-side brackets the handler's own selector grammar can gate on:
+    /// `[@]key=value` / `[@]key!=value` inside a parent part that is a pure AND.
+    /// Empty when the parent part is a boolean expression — the handlers'
+    /// grammar has no `and` / `or`, so such a bracket would be read as one
+    /// literal value — and empty for addressing (`[2]`) or an operator the
+    /// grammar never captures. These are exactly the predicates this change
+    /// hands over to the handler's gate: PostFilterSelector drops them from the
+    /// engine's post-filter, ChildSideStripped keeps them in the handler query.
+    /// Everything else stays where it is today.
+    /// </summary>
+    private static IEnumerable<string> HandlerGatedParentBrackets(string parent)
+    {
+        if (TryFlatten(ParseExpr(parent)) is null) yield break;
+        foreach (var content in ExtractBracketBlocks(parent, out _))
+        {
+            if (int.TryParse(content.Trim(), out _)) continue;
+            if (!HandlerGatedBracketRegex.IsMatch(content)) continue;
+            yield return content;
+        }
+    }
+
+    /// <summary>
+    /// The selector the ENGINE's post-filter may narrow. For a `parent > child`
+    /// selector the candidates the handler returned ARE the children, so a
+    /// parent-side predicate re-applied here can never match — a run does not
+    /// carry its paragraph's `style`, a table does not carry a paragraph's
+    /// `text` — and can only empty the result, with the diagnostic then blaming
+    /// the child. Measured on 1.0.151: `paragraph[style=Normal] > run` = 0 rows +
+    /// "unknown key 'style'", and `paragraph[text=AAABBB] > run` = 0 rows +
+    /// "no match for text='AAABBB'. Available: AAA, BBB" (the RUN texts) while
+    /// the paragraph's own text is AAABBB.
+    ///
+    /// Those predicates are not dropped, they move: the handler still receives
+    /// the whole selector and its ChildSelector branch is what gates the parent
+    /// (WordHandler.MatchesSelector). Only brackets that gate exists for move —
+    /// a parent-side predicate the handler's grammar cannot express has no gate
+    /// to defer to, so it keeps the legacy child-side evaluation here; dropping
+    /// it would let a filtered selector fall through to everything, the
+    /// bulk-edit hazard the element-token check above was added for
+    /// (BUG-R34-03), and a parent part that parses to a boolean is kept whole
+    /// for the same reason (the handlers' grammar has no `and` / `or`).
+    ///
+    /// With nothing to hand over the selector is returned unchanged, so every
+    /// path that is not a `parent > child` selector with a gateable parent
+    /// predicate is byte-for-byte what it is today. That covers the
+    /// ElementResolvesOwnBoolean family (the Excel row/col table-column keys the
+    /// handler attaches to the returned nodes — re-confirming them there is
+    /// deliberate), malformed selectors (so ParseExpr keeps reporting them
+    /// through the existing unclosed-/empty-bracket diagnostics wherever the
+    /// stray bracket sits) and pure-numeric brackets (addressing, ParseExpr's
+    /// business to skip).
+    /// </summary>
+    private static string PostFilterSelector(string selector)
+    {
+        int idx = ChildCombinatorIndex(selector);
+        if (idx < 0 || ElementResolvesOwnBoolean(selector)) return selector;
+        var blocks = ExtractBracketBlocks(selector, out bool balanced);
+        if (!balanced || blocks.Any(string.IsNullOrWhiteSpace)) return selector;
+
+        var parent = selector[..idx];
+        if (!HandlerGatedParentBrackets(parent).Any()) return selector;
+
+        // What the engine still has to re-apply: the child's own predicates plus
+        // the parent predicates the handler's grammar cannot express.
+        var kept = ExtractBracketBlocks(parent, out _)
+            .Where(content => !int.TryParse(content.Trim(), out _)
+                              && !HandlerGatedBracketRegex.IsMatch(content))
+            .Select(content => "[" + content + "]");
+        return selector[(idx + 1)..] + string.Concat(kept);
+    }
+
+    /// <summary>
+    /// The query string for the BOOLEAN path, which strips the filter brackets so
+    /// the handler returns the full element set for the tree to narrow. The
+    /// child side's brackets go; the parent side keeps exactly the brackets the
+    /// tree no longer applies (HandlerGatedParentBrackets) — they are the
+    /// handler's gate on the parent. Stripping them too, as the whole-selector
+    /// StripFilterBrackets did, dropped that gate silently and left the tree
+    /// evaluating a parent predicate against the children. When there is nothing
+    /// to keep this is StripFilterBrackets(selector) — the byte-identical
+    /// legacy string.
+    /// </summary>
+    private static string ChildSideStripped(string selector)
+    {
+        int idx = ChildCombinatorIndex(selector);
+        if (idx < 0) return StripFilterBrackets(selector);
+
+        var parent = selector[..idx];
+        var gated = HandlerGatedParentBrackets(parent).ToList();
+        if (gated.Count == 0) return StripFilterBrackets(selector);
+
+        return StripFilterBrackets(parent).TrimEnd()
+               + string.Concat(gated.Select(content => "[" + content + "]"))
+               + ">" + StripFilterBrackets(selector[(idx + 1)..]);
+    }
+
+    /// <summary>
     /// Unified selector filtering for query / set / remove. A pure-AND (flat)
     /// selector takes the exact legacy path: the handler pre-filters and the flat
     /// conditions are re-applied (idempotent). A selector containing `or` is
@@ -928,6 +1055,48 @@ internal static class AttributeFilter
     /// always applies all conditions: stripping the bracket means the handler did
     /// not pre-filter, so the tree must evaluate every predicate itself.
     /// </param>
+    /// <summary>
+    /// A selector must begin with something a handler can read as an element,
+    /// a cell/sheet reference, a path or a predicate. One that opens with a
+    /// stray symbol (<c>%%%badselector</c>, <c>!!invalid!!</c>) parsed to an
+    /// EMPTY element token in xlsx and pptx, and an empty token means "no type
+    /// filter" — every cell / every shape came back with exit 0, which is a
+    /// bulk-edit hazard once the same selector reaches set/remove. docx
+    /// happened to return nothing. Reject it in one place so all three formats
+    /// answer with the same invalid_selector the bracket checks already emit.
+    /// </summary>
+    private static void RejectGarbageSelectorHead(string selector)
+    {
+        var s = selector.TrimStart();
+        if (s.Length == 0) return;
+        var c = s[0];
+        // letters/digits/_ : element names, A1 refs, sheet names
+        // ' "            : Excel-quoted sheet names ('My Data'!row)
+        // / [ :          : path form, bare predicate, pseudo-class
+        // * . # @ $ (    : wildcard / CSS-style heads left to the handlers
+        if (!(char.IsLetterOrDigit(c) || c == '_' || c == '\'' || c == '"'
+            || c == '/' || c == '[' || c == ':' || c == '*' || c == '.' || c == '#'
+            || c == '@' || c == '$' || c == '('))
+            throw new CliException($"Malformed selector: \"{selector}\" does not start with an element name, a cell reference or a path.")
+            {
+                Code = "invalid_selector",
+                Suggestion = "Start with an element type, e.g. cell[value>5], shape[text~=Hello], p[bold=true], or a path like /Sheet1/A1."
+            };
+
+        // The same empty element token also arises AFTER a separator: a sheet
+        // prefix with nothing behind it (`Sheet1!`), a trailing or doubled
+        // combinator (`slide[1]>`, `slide[1]>>shape`), an empty pseudo-class
+        // (`cell:`). Look only at top-level text — a '>' or '!' inside a
+        // predicate value is literal.
+        var outside = System.Text.RegularExpressions.Regex.Replace(s, @"\[[^\]]*\]|'[^']*'|""[^""]*""", "").TrimEnd();
+        if (outside.Length > 0 && (outside[^1] is '>' or '!' or ':' or ',' || outside.Contains(">>")))
+            throw new CliException($"Malformed selector: \"{selector}\" has no element name after '{(outside.Contains(">>") ? ">>" : outside[^1].ToString())}'.")
+            {
+                Code = "invalid_selector",
+                Suggestion = "Name the element, e.g. Sheet1!cell, slide[1]>shape, cell:contains(text)."
+            };
+    }
+
     public static (List<DocumentNode> Results, List<FilterDiagnostic> Warnings) FilterSelector(
         string selector, Func<string, List<DocumentNode>> query, Func<string, string>? keyResolver = null,
         bool applyAll = true)
@@ -952,7 +1121,11 @@ internal static class AttributeFilter
             return (unionResults, unionWarnings);
         }
 
-        var expr = ParseExpr(selector);
+        RejectGarbageSelectorHead(selector);
+
+        // The parser sees the selector the post-filter is allowed to narrow —
+        // the child side of a combinator (see PostFilterSelector).
+        var expr = ParseExpr(PostFilterSelector(selector));
         if (expr != null && keyResolver != null)
             expr = NormalizeKeysExpr(expr, keyResolver);
 
@@ -973,7 +1146,9 @@ internal static class AttributeFilter
             // are attached by the handler's row-where, NOT present on a bare row —
             // must receive the full selector so the handler can resolve them; the tree
             // then re-confirms on the carried column values.
-            var queryStr = ElementResolvesOwnBoolean(selector) ? selector : StripFilterBrackets(selector);
+            // Strip only the CHILD side's brackets: the parent's must keep
+            // reaching the handler, which is what gates the parent.
+            var queryStr = ElementResolvesOwnBoolean(selector) ? selector : ChildSideStripped(selector);
             (results, warnings) = ApplyExprWithWarnings(query(queryStr), expr);
             leafConds = expr == null ? new List<Condition>() : LeafConditions(expr).ToList();
         }
@@ -999,7 +1174,7 @@ internal static class AttributeFilter
         {
             try
             {
-                var fullSet = query(StripFilterBrackets(selector));
+                var fullSet = query(ChildSideStripped(selector));
                 if (fullSet.Count > 0)
                     warnings = DiagnoseEmptyResult(fullSet, leafConds);
             }

@@ -736,10 +736,7 @@ internal static partial class ChartHelper
                         }
                     }
                     foreach (var dl in existingLabels)
-                    {
-                        dl.RemoveAllChildren<C.DataLabelPosition>();
-                        dl.PrependChild(new C.DataLabelPosition { Val = dlblPos });
-                    }
+                        SetDLblsChild(dl, new C.DataLabelPosition { Val = dlblPos });
                     break;
                 }
 
@@ -749,11 +746,7 @@ internal static partial class ChartHelper
                     if (plotArea2 == null) { unsupported.Add(key); break; }
                     var dls = EnsureDataLabelsOnAllChartGroups(plotArea2);
                     foreach (var dl in dls)
-                    {
-                        dl.RemoveAllChildren<C.TextProperties>();
-                        var tp = BuildLabelTextProperties(value);
-                        dl.PrependChild(tp);
-                    }
+                        SetDLblsChild(dl, BuildLabelTextProperties(value));
                     break;
                 }
 
@@ -966,7 +959,7 @@ internal static partial class ChartHelper
                 case "axistitle" or "vtitle":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAxis = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAxis = PrimaryValueAxis(plotArea2);
                     if (valAxis == null) { unsupported.Add(key); break; }
                     valAxis.RemoveAllChildren<C.Title>();
                     if (!value.Equals("none", StringComparison.OrdinalIgnoreCase))
@@ -1000,7 +993,7 @@ internal static partial class ChartHelper
                 case "axismin" or "min":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAxis = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAxis = PrimaryValueAxis(plotArea2);
                     var scaling = valAxis?.GetFirstChild<C.Scaling>();
                     if (scaling == null) { unsupported.Add(key); break; }
                     var minVal = ParseHelpers.SafeParseDouble(value, "axismin");
@@ -1018,7 +1011,7 @@ internal static partial class ChartHelper
                 case "axismax" or "max":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAxis = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAxis = PrimaryValueAxis(plotArea2);
                     var scaling = valAxis?.GetFirstChild<C.Scaling>();
                     if (scaling == null) { unsupported.Add(key); break; }
                     scaling.RemoveAllChildren<C.MaxAxisValue>();
@@ -1033,7 +1026,7 @@ internal static partial class ChartHelper
                 case "majorunit":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAxis = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAxis = PrimaryValueAxis(plotArea2);
                     if (valAxis == null) { unsupported.Add(key); break; }
                     var mu = ParseHelpers.SafeParseDouble(value, "majorunit");
                     // OOXML ST_AxisUnit: positive double. 0 or negative would
@@ -1050,7 +1043,7 @@ internal static partial class ChartHelper
                 case "minorunit":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAxis = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAxis = PrimaryValueAxis(plotArea2);
                     if (valAxis == null) { unsupported.Add(key); break; }
                     var nu = ParseHelpers.SafeParseDouble(value, "minorunit");
                     if (!(nu > 0))
@@ -1063,7 +1056,7 @@ internal static partial class ChartHelper
                 case "axisnumfmt" or "axisnumberformat":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAxis = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAxis = PrimaryValueAxis(plotArea2);
                     if (valAxis == null) { unsupported.Add(key); break; }
                     valAxis.RemoveAllChildren<C.NumberingFormat>();
                     var nf = new C.NumberingFormat { FormatCode = value, SourceLinked = false };
@@ -1100,7 +1093,7 @@ internal static partial class ChartHelper
                 case "gridlines" or "majorgridlines":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAxis = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAxis = PrimaryValueAxis(plotArea2);
                     if (valAxis == null) { unsupported.Add(key); break; }
                     valAxis.RemoveAllChildren<C.MajorGridlines>();
                     if (!value.Equals("none", StringComparison.OrdinalIgnoreCase) &&
@@ -1117,7 +1110,7 @@ internal static partial class ChartHelper
                 case "minorgridlines":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAxis = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAxis = PrimaryValueAxis(plotArea2);
                     if (valAxis == null) { unsupported.Add(key); break; }
                     valAxis.RemoveAllChildren<C.MinorGridlines>();
                     if (!value.Equals("none", StringComparison.OrdinalIgnoreCase) &&
@@ -1141,42 +1134,42 @@ internal static partial class ChartHelper
                 // already declares get/set: true for these.
                 case "gridlinecolor" or "majorgridlinecolor":
                 {
-                    var gl = chart.GetFirstChild<C.PlotArea>()?.GetFirstChild<C.ValueAxis>()?.GetFirstChild<C.MajorGridlines>();
+                    var gl = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>())?.GetFirstChild<C.MajorGridlines>();
                     if (gl == null) { unsupported.Add(key); break; }
                     SetGridlineColor(gl, value);
                     break;
                 }
                 case "gridlinewidth" or "majorgridlinewidth":
                 {
-                    var gl = chart.GetFirstChild<C.PlotArea>()?.GetFirstChild<C.ValueAxis>()?.GetFirstChild<C.MajorGridlines>();
+                    var gl = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>())?.GetFirstChild<C.MajorGridlines>();
                     if (gl == null) { unsupported.Add(key); break; }
                     if (!SetGridlineWidth(gl, value)) { unsupported.Add(key); }
                     break;
                 }
                 case "gridlinedash" or "majorgridlinedash":
                 {
-                    var gl = chart.GetFirstChild<C.PlotArea>()?.GetFirstChild<C.ValueAxis>()?.GetFirstChild<C.MajorGridlines>();
+                    var gl = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>())?.GetFirstChild<C.MajorGridlines>();
                     if (gl == null) { unsupported.Add(key); break; }
                     SetGridlineDash(gl, value);
                     break;
                 }
                 case "minorgridlinecolor":
                 {
-                    var gl = chart.GetFirstChild<C.PlotArea>()?.GetFirstChild<C.ValueAxis>()?.GetFirstChild<C.MinorGridlines>();
+                    var gl = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>())?.GetFirstChild<C.MinorGridlines>();
                     if (gl == null) { unsupported.Add(key); break; }
                     SetGridlineColor(gl, value);
                     break;
                 }
                 case "minorgridlinewidth":
                 {
-                    var gl = chart.GetFirstChild<C.PlotArea>()?.GetFirstChild<C.ValueAxis>()?.GetFirstChild<C.MinorGridlines>();
+                    var gl = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>())?.GetFirstChild<C.MinorGridlines>();
                     if (gl == null) { unsupported.Add(key); break; }
                     if (!SetGridlineWidth(gl, value)) { unsupported.Add(key); }
                     break;
                 }
                 case "minorgridlinedash":
                 {
-                    var gl = chart.GetFirstChild<C.PlotArea>()?.GetFirstChild<C.ValueAxis>()?.GetFirstChild<C.MinorGridlines>();
+                    var gl = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>())?.GetFirstChild<C.MinorGridlines>();
                     if (gl == null) { unsupported.Add(key); break; }
                     SetGridlineDash(gl, value);
                     break;
@@ -1821,7 +1814,7 @@ internal static partial class ChartHelper
                 case "valaxisvisible" or "valaxis.visible":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAx = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAx = PrimaryValueAxis(plotArea2);
                     if (valAx == null) { unsupported.Add(key); break; }
                     valAx.RemoveAllChildren<C.Delete>();
                     valAx.InsertAfter(new C.Delete { Val = !ParseHelpers.IsTruthy(value) }, valAx.GetFirstChild<C.Scaling>());
@@ -1903,7 +1896,7 @@ internal static partial class ChartHelper
                 case "crosses":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAx = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAx = PrimaryValueAxis(plotArea2);
                     if (valAx == null) { unsupported.Add(key); break; }
                     // Remove only same-type predecessors. The pre-fix code also
                     // removed C.CrossesAt here, which silently wiped a sibling
@@ -1935,7 +1928,7 @@ internal static partial class ChartHelper
                 case "crossesat":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAx = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAx = PrimaryValueAxis(plotArea2);
                     if (valAx == null) { unsupported.Add(key); break; }
                     // Validate BEFORE mutating (SafeParseDouble can throw).
                     var crossesAtVal = ParseHelpers.SafeParseDouble(value, "crossesAt");
@@ -1962,7 +1955,7 @@ internal static partial class ChartHelper
                 case "crossbetween":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAx = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAx = PrimaryValueAxis(plotArea2);
                     if (valAx == null) { unsupported.Add(key); break; }
                     // Validate BEFORE mutating.
                     var cbVal = value.ToLowerInvariant() switch
@@ -1987,7 +1980,7 @@ internal static partial class ChartHelper
                 case "axisorientation" or "axisreverse":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAx = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAx = PrimaryValueAxis(plotArea2);
                     var scaling = valAx?.GetFirstChild<C.Scaling>();
                     if (scaling == null) { unsupported.Add(key); break; }
                     scaling.RemoveAllChildren<C.Orientation>();
@@ -2006,7 +1999,7 @@ internal static partial class ChartHelper
                 case "logbase" or "logscale" or "yaxisscale":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAx = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAx = PrimaryValueAxis(plotArea2);
                     var scaling = valAx?.GetFirstChild<C.Scaling>();
                     if (scaling == null) { unsupported.Add(key); break; }
                     // DEFERRED(xlsx/chart-logscale) CL23: accept `logScale=true`
@@ -2071,7 +2064,7 @@ internal static partial class ChartHelper
                 case "dispunits" or "displayunits":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAx = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAx = PrimaryValueAxis(plotArea2);
                     if (valAx == null) { unsupported.Add(key); break; }
                     valAx.RemoveAllChildren<C.DisplayUnits>();
                     if (!value.Equals("none", StringComparison.OrdinalIgnoreCase))
@@ -2211,6 +2204,24 @@ internal static partial class ChartHelper
                             $"Invalid scatterStyle '{value}'. Valid values: line, lineMarker, marker, smooth, smoothMarker.")
                     };
                     sc.PrependChild(new C.ScatterStyle { Val = ssVal });
+                    // #500: PowerPoint and other renderers draw by the series line and
+                    // ignore scatterStyle, so switching to markers-only must
+                    // also turn each series line off — moving its colour onto
+                    // the markers — or the points stay connected.
+                    if (ssVal == C.ScatterStyleValues.Marker)
+                    {
+                        foreach (var ser in sc.Elements<C.ScatterChartSeries>())
+                        {
+                            var spPrS = ser.GetFirstChild<C.ChartShapeProperties>();
+                            var lnS = spPrS?.GetFirstChild<Drawing.Outline>();
+                            if (lnS?.GetFirstChild<Drawing.NoFill>() != null) continue;
+                            var rgb = lnS?.GetFirstChild<Drawing.SolidFill>()?.GetFirstChild<Drawing.RgbColorModelHex>()?.Val?.Value;
+                            var spPrNew = new C.ChartShapeProperties(new Drawing.Outline(new Drawing.NoFill()));
+                            if (spPrS != null) { spPrS.InsertAfterSelf(spPrNew); spPrS.Remove(); }
+                            else InsertSeriesChildInOrder(ser, spPrNew);
+                            if (rgb != null) ColorScatterMarker(ser, rgb);
+                        }
+                    }
                     break;
                 }
 
@@ -2469,10 +2480,7 @@ internal static partial class ChartHelper
                     if (plotArea2 == null) { unsupported.Add(key); break; }
                     var show = ParseHelpers.IsTruthy(value);
                     foreach (var dl in plotArea2.Descendants<C.DataLabels>())
-                    {
-                        dl.RemoveAllChildren<C.ShowLeaderLines>();
-                        dl.AppendChild(new C.ShowLeaderLines { Val = show });
-                    }
+                        SetDLblsChild(dl, new C.ShowLeaderLines { Val = show });
                     break;
                 }
 
@@ -2484,9 +2492,8 @@ internal static partial class ChartHelper
                     if (plotArea2 == null) { unsupported.Add(key); break; }
                     foreach (var dl in plotArea2.Descendants<C.DataLabels>())
                     {
-                        dl.RemoveAllChildren<C.Separator>();
                         var sep = value.Replace("\\n", "\n");
-                        dl.AppendChild(new C.Separator { Text = sep });
+                        SetDLblsChild(dl, new C.Separator { Text = sep });
                     }
                     break;
                 }
@@ -2496,10 +2503,7 @@ internal static partial class ChartHelper
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
                     if (plotArea2 == null) { unsupported.Add(key); break; }
                     foreach (var dl in plotArea2.Descendants<C.DataLabels>())
-                    {
-                        dl.RemoveAllChildren<C.NumberingFormat>();
-                        dl.PrependChild(new C.NumberingFormat { FormatCode = value, SourceLinked = false });
-                    }
+                        SetDLblsChild(dl, new C.NumberingFormat { FormatCode = value, SourceLinked = false });
                     break;
                 }
 
@@ -2509,10 +2513,7 @@ internal static partial class ChartHelper
                     if (plotArea2 == null) { unsupported.Add(key); break; }
                     var show = ParseHelpers.IsTruthy(value);
                     foreach (var dl in plotArea2.Descendants<C.DataLabels>())
-                    {
-                        dl.RemoveAllChildren<C.ShowLeaderLines>();
-                        dl.AppendChild(new C.ShowLeaderLines { Val = show });
-                    }
+                        SetDLblsChild(dl, new C.ShowLeaderLines { Val = show });
                     break;
                 }
 
@@ -2521,10 +2522,7 @@ internal static partial class ChartHelper
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
                     if (plotArea2 == null) { unsupported.Add(key); break; }
                     foreach (var dl in plotArea2.Descendants<C.DataLabels>())
-                    {
-                        dl.RemoveAllChildren<C.ShowBubbleSize>();
-                        dl.AppendChild(new C.ShowBubbleSize { Val = ParseHelpers.IsTruthy(value) });
-                    }
+                        SetDLblsChild(dl, new C.ShowBubbleSize { Val = ParseHelpers.IsTruthy(value) });
                     break;
                 }
 
@@ -2541,7 +2539,7 @@ internal static partial class ChartHelper
                     if (!EnsureDataLabelsForShowToggle(chart, key, unsupported, out var dls)) break;
                     var show = ParseHelpers.IsTruthy(value);
                     foreach (var dl in dls)
-                        SetDLblsShowFlag(dl, new C.ShowValue { Val = show });
+                        SetDLblsChild(dl, new C.ShowValue { Val = show });
                     break;
                 }
 
@@ -2551,7 +2549,7 @@ internal static partial class ChartHelper
                     if (!EnsureDataLabelsForShowToggle(chart, key, unsupported, out var dls)) break;
                     var show = ParseHelpers.IsTruthy(value);
                     foreach (var dl in dls)
-                        SetDLblsShowFlag(dl, new C.ShowPercent { Val = show });
+                        SetDLblsChild(dl, new C.ShowPercent { Val = show });
                     break;
                 }
 
@@ -2561,7 +2559,7 @@ internal static partial class ChartHelper
                     if (!EnsureDataLabelsForShowToggle(chart, key, unsupported, out var dls)) break;
                     var show = ParseHelpers.IsTruthy(value);
                     foreach (var dl in dls)
-                        SetDLblsShowFlag(dl, new C.ShowCategoryName { Val = show });
+                        SetDLblsChild(dl, new C.ShowCategoryName { Val = show });
                     break;
                 }
 
@@ -2571,7 +2569,7 @@ internal static partial class ChartHelper
                     if (!EnsureDataLabelsForShowToggle(chart, key, unsupported, out var dls)) break;
                     var show = ParseHelpers.IsTruthy(value);
                     foreach (var dl in dls)
-                        SetDLblsShowFlag(dl, new C.ShowSeriesName { Val = show });
+                        SetDLblsChild(dl, new C.ShowSeriesName { Val = show });
                     break;
                 }
 
@@ -2580,7 +2578,7 @@ internal static partial class ChartHelper
                     if (!EnsureDataLabelsForShowToggle(chart, key, unsupported, out var dls)) break;
                     var show = ParseHelpers.IsTruthy(value);
                     foreach (var dl in dls)
-                        SetDLblsShowFlag(dl, new C.ShowLegendKey { Val = show });
+                        SetDLblsChild(dl, new C.ShowLegendKey { Val = show });
                     break;
                 }
 
@@ -2964,7 +2962,7 @@ internal static partial class ChartHelper
                 case "valaxisline" or "valaxis.line":
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
-                    var valAx = plotArea2?.GetFirstChild<C.ValueAxis>();
+                    var valAx = PrimaryValueAxis(plotArea2);
                     if (valAx == null) { unsupported.Add(key); break; }
                     ApplyAxisLine(valAx, value);
                     break;
@@ -2978,7 +2976,7 @@ internal static partial class ChartHelper
                 // attribute-by-attribute.
                 case "valaxisline.color" or "valaxisline.width" or "valaxisline.dash":
                 {
-                    var ax = chart.GetFirstChild<C.PlotArea>()?.GetFirstChild<C.ValueAxis>();
+                    var ax = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>());
                     if (ax == null) { unsupported.Add(key); break; }
                     if (!MutateAxisLineAttr(ax, key.Substring("valaxisline.".Length), value))
                         unsupported.Add(key);
@@ -3025,7 +3023,7 @@ internal static partial class ChartHelper
                 case "valax.sppr":
                 {
                     if (string.IsNullOrWhiteSpace(value)) break;
-                    var valAx = chart.GetFirstChild<C.PlotArea>()?.GetFirstChild<C.ValueAxis>();
+                    var valAx = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>());
                     if (valAx == null) { unsupported.Add(key); break; }
                     SetAxisSpPr(valAx, new C.ChartShapeProperties(value));
                     break;
@@ -3065,7 +3063,7 @@ internal static partial class ChartHelper
                 case "gridline.sppr" or "minorgridline.sppr":
                 {
                     if (string.IsNullOrWhiteSpace(value)) break;
-                    var valAxG = chart.GetFirstChild<C.PlotArea>()?.GetFirstChild<C.ValueAxis>();
+                    var valAxG = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>());
                     OpenXmlCompositeElement? gl = key.ToLowerInvariant() == "gridline.sppr"
                         ? valAxG?.GetFirstChild<C.MajorGridlines>()
                         : valAxG?.GetFirstChild<C.MinorGridlines>();
@@ -3087,7 +3085,7 @@ internal static partial class ChartHelper
                 case "valax.txpr":
                 {
                     if (string.IsNullOrWhiteSpace(value)) break;
-                    var valAx = chart.GetFirstChild<C.PlotArea>()?.GetFirstChild<C.ValueAxis>();
+                    var valAx = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>());
                     if (valAx == null) { unsupported.Add(key); break; }
                     SetAxisTxPr(valAx, new C.TextProperties(value));
                     break;
@@ -3123,8 +3121,8 @@ internal static partial class ChartHelper
                 case "axistitle.ppr":
                 {
                     if (string.IsNullOrWhiteSpace(value)) break;
-                    var vAxisTitle = chart.GetFirstChild<C.PlotArea>()
-                        ?.GetFirstChild<C.ValueAxis>()?.GetFirstChild<C.Title>();
+                    var vAxisTitle = PrimaryValueAxis(chart.GetFirstChild<C.PlotArea>())
+                        ?.GetFirstChild<C.Title>();
                     if (!ApplyTitlePPr(vAxisTitle, value, skipSize: false, skipBold: false))
                         unsupported.Add(key);
                     break;
@@ -3351,14 +3349,11 @@ internal static partial class ChartHelper
                         {
                             dLbl = new C.DataLabel();
                             dLbl.Index = new C.Index { Val = ooxmlIdx };
-                            // Insert dLbl before the show* elements (dLbl comes before showLegendKey per schema)
-                            var insertBefore = dLbls.GetFirstChild<C.ShowLegendKey>() as OpenXmlElement
-                                ?? dLbls.GetFirstChild<C.ShowValue>()
-                                ?? dLbls.FirstChild;
-                            if (insertBefore != null)
-                                dLbls.InsertBefore(dLbl, insertBefore);
-                            else
-                                dLbls.AppendChild(dLbl);
+                            // dLbl leads CT_DLbls, so it goes before numFmt/txPr/
+                            // dLblPos/show* — anchoring on the show flags alone
+                            // landed it after a numFmt or txPr that was already
+                            // present ("unexpected child element dLbl").
+                            InsertDLblsChildInOrder(dLbls, dLbl);
                         }
                         SetManualLayoutProperty(dLbl, dlProp, dlLayoutVal);
                         break;
@@ -3581,7 +3576,7 @@ internal static partial class ChartHelper
                 new Drawing.ListStyle(),
                 new Drawing.Paragraph(new Drawing.ParagraphProperties(new Drawing.DefaultRunProperties()))
             );
-            dl.PrependChild(tp);
+            SetDLblsChild(dl, tp);
         }
         var para = tp.GetFirstChild<Drawing.Paragraph>()
             ?? (Drawing.Paragraph)tp.AppendChild(new Drawing.Paragraph());
@@ -4553,45 +4548,78 @@ internal static partial class ChartHelper
         return dataLabels.Count > 0;
     }
 
-    // CT_DLbls fixes a strict child order. The per-flag setters
-    // (datalabels.showvalue / showcatname / …) used RemoveAllChildren<T>() +
-    // AppendChild(T), which drops the element at the END — so toggling showVal
-    // on a dLbls that already carried showCatName/showSerName/showPercent
-    // produced <showCatName/><showSerName/><showPercent/><showVal/>, and the
-    // validator rejected the out-of-order showVal ("unexpected child element
-    // showVal"). Replace those with this helper, which removes the existing
-    // element of the same type and re-inserts it at its canonical position.
+    // CT_DLbls fixes a strict child order (ECMA-376 §21.2.2.49): dLbl*, delete,
+    // numFmt, spPr, txPr, dLblPos, showLegendKey, showVal, showCatName,
+    // showSerName, showPercent, showBubbleSize, separator, showLeaderLines,
+    // leaderLines, extLst.
+    //
+    // A writer that reaches for PrependChild/AppendChild places its child by
+    // CALL order rather than by schema, so the emitted element order depended
+    // on the order in which the caller happened to pass the properties.
+    // `dataLabels=value` + `dataLabels.numFmt=#,##0` + `labelFont.size=9pt`
+    // emitted <c:dLbls><c:txPr/><c:numFmt/>…</c:dLbls> — numFmt must precede
+    // txPr — and officecli's own `validate` then rejected the file `add` had
+    // just reported as successful. The show-flag setters had the same defect
+    // in the other direction: RemoveAllChildren<T>() + AppendChild(T) dropped
+    // the flag at the END, so toggling showVal on a dLbls that already carried
+    // showCatName/showSerName/showPercent produced <showCatName/>…<showVal/>
+    // ("unexpected child element showVal").
+    //
+    // Every writer below now goes through these ranks, so the position of a
+    // dLbls child depends only on its type — never on the order of the calls
+    // that produced it (CLI argument order, `dump` emission order and `batch`
+    // key order all end up identical).
     private static readonly Dictionary<Type, int> DLblsChildOrder = new()
     {
-        [typeof(C.Delete)] = 0,
-        [typeof(C.NumberingFormat)] = 1,
-        [typeof(C.ChartShapeProperties)] = 2,
-        [typeof(C.TextProperties)] = 3,
-        [typeof(C.DataLabelPosition)] = 4,
-        [typeof(C.ShowLegendKey)] = 5,
-        [typeof(C.ShowValue)] = 6,
-        [typeof(C.ShowCategoryName)] = 7,
-        [typeof(C.ShowSeriesName)] = 8,
-        [typeof(C.ShowPercent)] = 9,
-        [typeof(C.ShowBubbleSize)] = 10,
-        [typeof(C.Separator)] = 11,
-        [typeof(C.ShowLeaderLines)] = 12,
-        [typeof(C.LeaderLines)] = 13,
+        [typeof(C.DataLabel)] = 0,
+        [typeof(C.Delete)] = 1,
+        [typeof(C.NumberingFormat)] = 2,
+        [typeof(C.ChartShapeProperties)] = 3,
+        [typeof(C.TextProperties)] = 4,
+        [typeof(C.DataLabelPosition)] = 5,
+        [typeof(C.ShowLegendKey)] = 6,
+        [typeof(C.ShowValue)] = 7,
+        [typeof(C.ShowCategoryName)] = 8,
+        [typeof(C.ShowSeriesName)] = 9,
+        [typeof(C.ShowPercent)] = 10,
+        [typeof(C.ShowBubbleSize)] = 11,
+        [typeof(C.Separator)] = 12,
+        [typeof(C.ShowLeaderLines)] = 13,
+        [typeof(C.LeaderLines)] = 14,
+        [typeof(C.ExtensionList)] = 15,
     };
 
     private static int DLblsOrd(DocumentFormat.OpenXml.OpenXmlElement e)
         => DLblsChildOrder.TryGetValue(e.GetType(), out var o) ? o : 99;
 
-    private static void SetDLblsShowFlag(C.DataLabels dl, DocumentFormat.OpenXml.OpenXmlElement child)
+    /// <summary>
+    /// Insert <paramref name="child"/> at its canonical CT_DLbls position,
+    /// immediately before the first child that must follow it, leaving every
+    /// sibling alone. Use for the children CT_DLbls permits to repeat
+    /// (<c>dLbl</c>, one per data point) — for a single-valued child prefer
+    /// <see cref="SetDLblsChild"/>.
+    /// </summary>
+    internal static void InsertDLblsChildInOrder(C.DataLabels dl, DocumentFormat.OpenXml.OpenXmlElement child)
+    {
+        var rank = DLblsOrd(child);
+        var anchor = dl.ChildElements.FirstOrDefault(c => DLblsOrd(c) > rank);
+        if (anchor != null) dl.InsertBefore(child, anchor);
+        else dl.AppendChild(child);
+    }
+
+    /// <summary>
+    /// Replace any existing child of the same type with <paramref name="child"/>,
+    /// at that type's canonical CT_DLbls position. CT_DLbls allows at most one
+    /// of numFmt, spPr, txPr, dLblPos, each show* flag, separator — route every
+    /// write of those through here instead of PrependChild/AppendChild.
+    /// </summary>
+    internal static void SetDLblsChild(C.DataLabels dl, DocumentFormat.OpenXml.OpenXmlElement child)
     {
         // Drop any existing element of the same type, then insert before the
         // first child whose canonical rank is higher (i.e. must come after).
         foreach (var existing in dl.ChildElements.Where(c => c.GetType() == child.GetType()).ToList())
             existing.Remove();
-        var rank = DLblsOrd(child);
-        var anchor = dl.ChildElements.FirstOrDefault(c => DLblsOrd(c) > rank);
-        if (anchor != null) dl.InsertBefore(child, anchor);
-        else dl.AppendChild(child);
+        InsertDLblsChildInOrder(dl, child);
     }
 
     // Apply a chart-level `labelPos=...` request to a combo chart by writing
@@ -4631,7 +4659,7 @@ internal static partial class ChartHelper
                 InsertChartGroupDLbls(grp, dl);
             }
             dl.RemoveAllChildren<C.DataLabelPosition>();
-            dl.PrependChild(new C.DataLabelPosition { Val = pos });
+            SetDLblsChild(dl, new C.DataLabelPosition { Val = pos });
         }
     }
 }

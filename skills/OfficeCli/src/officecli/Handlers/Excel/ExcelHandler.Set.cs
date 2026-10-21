@@ -16,9 +16,28 @@ namespace OfficeCli.Handlers;
 
 public partial class ExcelHandler
 {
-    public List<string> Set(string path, Dictionary<string, string> properties)
+    // Resolve sheet-scoped paths before a resident promotes the handler and
+    // marks itself dirty. Keep selector and workbook-level dispatch in Set.
+    internal void ValidateSetSheet(string path)
     {
-        Modified = true;
+        if (!string.IsNullOrEmpty(path)
+            && (!path.StartsWith("/") || AttributeFilter.IsContentFilterPath(path)))
+            return;
+
+        path = ResolveSheetIndexInPath(NormalizeExcelPath(path));
+        if (path == "/" || Regex.IsMatch(path.TrimStart('/'), @"^namedrange\[(.+?)\]$", RegexOptions.IgnoreCase))
+            return;
+
+        var sheetName = path.TrimStart('/').Split('/', 2)[0];
+        if (FindWorksheet(sheetName) == null)
+            throw SheetNotFoundException(sheetName);
+    }
+
+    public List<string> Set(string path, Dictionary<string, string> properties)
+        => MarkModified(() => SetCore(path, properties));
+
+    private List<string> SetCore(string path, Dictionary<string, string> properties)
+    {
         // Batch Set: route to the shared filter engine when the path is a bare
         // selector (no `/`) OR a `/`-scoped path that carries a content filter
         // (e.g. `/Sheet1/cell[value>5000 or value<300]`). The latter would
@@ -318,7 +337,7 @@ public partial class ExcelHandler
         {
             if (cellPreExisted)
                 // Rollback: restore cell to pre-modification state.
-                cell.Parent?.ReplaceChild(cellBackup, cell);
+                OfficeCli.Core.ElementRollback.RestoreInPlace(cell, cellBackup);
             else
                 // Newly created by this Set — remove it so a failed create
                 // leaves no ghost cell.
