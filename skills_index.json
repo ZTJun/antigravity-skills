@@ -57,13 +57,7 @@
     "id": "baoyu-image-gen",
     "path": "skills/baoyu-image-gen",
     "name": "baoyu-image-gen",
-    "description": "AI image generation with OpenAI GPT Image 2, Azure OpenAI, Google, OpenRouter, DashScope, Z.AI GLM-Image, MiniMax, Jimeng, Seedream, Replicate and Agnes APIs. Supports text-to-image, reference images, aspect ratios, and batch generation from saved prompt files. Sequential by default; use batch parallel generation when the user already has multiple prompts or wants stable multi-image throughput. Use when user asks to generate, create, or draw images."
-  },
-  {
-    "id": "baoyu-imagine",
-    "path": "skills/baoyu-imagine",
-    "name": "baoyu-imagine",
-    "description": "AI image generation with OpenAI GPT Image 2, Azure OpenAI, Google, OpenRouter, DashScope, Z.AI GLM-Image, MiniMax, Jimeng, Seedream and Replicate APIs. Supports text-to-image, reference images, aspect ratios, and batch generation from saved prompt files. Sequential by default; use batch parallel generation when the user already has multiple prompts or wants stable multi-image throughput. Use when user asks to generate, create, or draw images."
+    "description": "AI image generation with OpenAI GPT Image 2.5, Azure OpenAI, Google, OpenRouter, DashScope, Z.AI GLM-Image, MiniMax, Jimeng, Seedream, Replicate and Agnes APIs. Supports text-to-image, reference images, aspect ratios, and batch generation from saved prompt files. Sequential by default; use batch parallel generation when the user already has multiple prompts or wants stable multi-image throughput. Use when user asks to generate, create, or draw images."
   },
   {
     "id": "baoyu-infographic",
@@ -111,7 +105,7 @@
     "id": "brainstorming",
     "path": "skills/brainstorming",
     "name": "brainstorming",
-    "description": "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation."
+    "description": "You MUST use this before any creative work - creating features, building components, adding functionality, modifying behavior, or planning anything new, in software or out of it (a talk, a business, a renovation)."
   },
   {
     "id": "brand-guidelines",
@@ -159,7 +153,7 @@
     "id": "defuddle",
     "path": "skills/defuddle",
     "name": "defuddle",
-    "description": "Extract clean markdown content from web pages using Defuddle CLI, removing clutter and navigation to save tokens. Use instead of WebFetch when the user provides a URL to read or analyze, for online documentation, articles, blog posts, or any standard web page. Do NOT use for URLs ending in .md — those are already markdown, use WebFetch directly."
+    "description": "Extract clean Markdown from HTML pages with Defuddle CLI."
   },
   {
     "id": "dispatching-parallel-agents",
@@ -189,7 +183,7 @@
     "id": "executing-plans",
     "path": "skills/executing-plans",
     "name": "executing-plans",
-    "description": "Use when you have a written implementation plan to execute in a separate session with review checkpoints"
+    "description": "Use when executing an implementation plan in the current session as the implementer yourself — your human partner chose inline execution, or no subagent tool is available"
   },
   {
     "id": "filesystem-context",
@@ -297,7 +291,7 @@
     "id": "planning-with-files",
     "path": "skills/planning-with-files",
     "name": "planning-with-files",
-    "description": "Manus-style persistent file-based planning for AI coding agents: keeps task_plan.md, findings.md, and progress.md on disk so work survives context loss and /clear. Use when asked to plan out, break down, or organize a multi-step project, research task, or any work requiring 5+ tool calls. Supports automatic session recovery after /clear."
+    "description": "Persistent file-based planning for multi-step AI-agent work. Keeps task_plan.md, findings.md, and progress.md on disk; lifecycle hooks inject selected project planning context. Automatic recovery reads project planning files only. Explicit session-catchup.py --metadata reads same-project local agent session records and emits aggregate counts only; --replay may emit bounded nonce-framed excerpts. Optional gated mode can request continuation only when the host supports it and never runs commands declared in Markdown. The skill has no network upload path. Use for research or work needing 5+ tool calls."
   },
   {
     "id": "pptx",
