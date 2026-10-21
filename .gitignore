@@ -66,6 +66,7 @@ logs/
 *.bak
 *.tmp
 *.temp
+claude-backup-*.tar.gz
 
 # Test artifacts
 .coverage
