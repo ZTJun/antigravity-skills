@@ -329,8 +329,13 @@ static partial class CommandBuilder
                 }
                 else if (handler is OfficeCli.Handlers.ExcelHandler excelHandler)
                     html = RenderViaRegistry(excelHandler, "xlsx", new OfficeCli.Core.Rendering.RenderOptions { CellRange = clipArg })!;
-                else if (handler is OfficeCli.Handlers.WordHandler wordHandlerGrid && gridCols != 0)
+                else if (handler is OfficeCli.Handlers.WordHandler wordHandlerGrid
+                         && (gridCols != 0 || IsMultiPageFilter(pageFilter)))
                 {
+                    // A multi-page --page range without --grid is a one-column
+                    // contact sheet of just those pages, so the viewport follows
+                    // the rows instead of cropping to page 1 (issue #485, docx
+                    // half; mirrors the pptx branch above).
                     // Contact-sheet grid: tile every page into an N-column (or auto)
                     // thumbnail grid for a one-shot whole-document overview.
                     // Native-first, mirroring pptx and single-page docx: on Windows
@@ -357,9 +362,17 @@ static partial class CommandBuilder
                     catch { /* fall back to 1 row */ }
                     finally { try { File.Delete(tmpForCount); } catch { /* ignore */ } }
 
-                    // -1 = auto: pick columns that keep the composed sheet ≈ square.
-                    int docGridCols = gridCols < 0 ? OfficeCli.Core.HtmlScreenshot.AutoGridColumns(pageCount, npW, npH) : gridCols;
-                    int rows = Math.Max(1, (pageCount + docGridCols - 1) / docGridCols);
+                    // Pages actually tiled: the --page selection clamped to the
+                    // document, or every page when no filter was given.
+                    var selectedPages = ParseDocxPageSelection(pageFilter, pageCount);
+                    int tiled = selectedPages.Count > 0 ? selectedPages.Count : pageCount;
+                    string nativePageSpec = selectedPages.Count > 0 ? string.Join(",", selectedPages) : $"1-{pageCount}";
+
+                    // -1 = auto: pick columns that keep the composed sheet ≈ square;
+                    // 0 (range without --grid) = one column.
+                    int docGridCols = gridCols < 0 ? OfficeCli.Core.HtmlScreenshot.AutoGridColumns(tiled, npW, npH)
+                        : gridCols == 0 ? 1 : gridCols;
+                    int rows = Math.Max(1, (tiled + docGridCols - 1) / docGridCols);
 
                     // Pre-cap to the 1920 ceiling OURSELVES and recompute cellW from the
                     // final width, so cellW and the capture viewport stay consistent
@@ -368,7 +381,10 @@ static partial class CommandBuilder
                     // Subtract a scrollbar allowance so this matches layoutGrid's
                     // clientWidth-derived cell size → the row-height estimate (and thus
                     // the captured viewport) tracks the real grid with little slack.
-                    double vpW = screenshotWidth;
+                    // One column at the default dims: a page-wide sheet, so each
+                    // page keeps its native width before the 1920 ceiling applies.
+                    double vpW = screenshotWidth == 1600 && screenshotHeight == 1200 && docGridCols == 1
+                        ? npW + scrollbar + 2.0 * pad : screenshotWidth;
                     double cellW = Math.Max(1.0, (vpW - scrollbar - 2.0 * pad - (docGridCols - 1) * gap) / docGridCols);
                     double cellH = cellW * npH / npW;
                     double vpH = pad * 2 + rows * cellH + (rows - 1) * gap;
@@ -379,7 +395,7 @@ static partial class CommandBuilder
                     OfficeCli.Core.NativeRenderFailure? nativeFailure = null;
                     if (renderMode != "html" && OperatingSystem.IsWindows())
                     {
-                        try { directPng = OfficeCli.Core.WordPdfBackend.RenderGrid(file.FullName, $"1-{pageCount}", (int)Math.Round(cellW), (int)Math.Round(cellH), docGridCols, gap, pad, out nativeFailure); }
+                        try { directPng = OfficeCli.Core.WordPdfBackend.RenderGrid(file.FullName, nativePageSpec, (int)Math.Round(cellW), (int)Math.Round(cellH), docGridCols, gap, pad, out nativeFailure); }
                         catch (Exception ex) { directPng = null; nativeFailure = OfficeCli.Core.NativeRenderFailure.FromException(ex); }
                     }
                     if (renderMode == "native" && directPng == null)
@@ -389,7 +405,7 @@ static partial class CommandBuilder
                         // HTML fallback: layoutGrid tiles in-browser; size the viewport
                         // to fit the rows so window-size backends don't crop.
                         html = RenderViaRegistry(wordHandlerGrid, "docx", new OfficeCli.Core.Rendering.RenderOptions
-                        { GridColumns = docGridCols, GridCellWidthPx = (int)Math.Round(cellW) })!;
+                        { PageFilter = selectedPages.Count > 0 ? pageFilter : null, GridColumns = docGridCols, GridCellWidthPx = (int)Math.Round(cellW) })!;
                         screenshotWidth = Math.Max(1, (int)Math.Round(vpW));
                         screenshotHeight = Math.Max(1, (int)Math.Ceiling(vpH));
                     }
@@ -773,6 +789,41 @@ static partial class CommandBuilder
         if (renderer == null) return null;
         return renderer.Render(
             new OfficeCli.Handlers.Rendering.HandlerRenderInput(handler, formatId), options).Bytes;
+    }
+
+    /// <summary>True when a --page filter names more than one page (a range or a list).</summary>
+    internal static bool IsMultiPageFilter(string? pageFilter)
+    {
+        if (string.IsNullOrWhiteSpace(pageFilter)) return false;
+        var pages = ParseDocxPageSelection(pageFilter, int.MaxValue);
+        return pages.Count > 1;
+    }
+
+    /// <summary>
+    /// Expand a docx --page filter ("1", "2-5", "1,3,5", "2-4,7") into the
+    /// sorted distinct pages within 1..total. Unparsable parts are ignored,
+    /// matching the preview's own lenient filter.
+    /// </summary>
+    internal static List<int> ParseDocxPageSelection(string? pageFilter, int total)
+    {
+        var pages = new SortedSet<int>();
+        if (string.IsNullOrWhiteSpace(pageFilter)) return new List<int>();
+        foreach (var part in pageFilter.Split(','))
+        {
+            var t = part.Trim();
+            if (t.Contains('-'))
+            {
+                var r = t.Split('-', 2);
+                if (int.TryParse(r[0].Trim(), out var from) && int.TryParse(r[1].Trim(), out var to))
+                {
+                    to = Math.Min(to, total);
+                    for (int p = Math.Max(1, from); p <= to; p++) pages.Add(p);
+                }
+            }
+            else if (int.TryParse(t, out var n) && n >= 1 && n <= total)
+                pages.Add(n);
+        }
+        return pages.ToList();
     }
 
     private static (int? start, int? end) ParsePptHtmlPage(

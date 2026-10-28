@@ -1498,7 +1498,9 @@ internal static partial class ChartHelper
             // styling/data sibling; dPt sits after spPr/invertIfNeg/pictureOpts
             // and before dLbls and the data tail. Appending either at the end
             // makes Word silently ignore it (and the validator rejects it).
-            "spPr" => ["invertIfNegative", "pictureOptions", "dPt", "dLbls", "trendline", "errBars", "cat", "val", "xVal", "yVal", "bubbleSize", "bubble3D", "marker", "shape", "smooth", "extLst"],
+            // CT_PieSer / CT_DoughnutSer put explosion right after spPr, so
+            // spPr must land before it too.
+            "spPr" => ["invertIfNegative", "pictureOptions", "explosion", "marker", "dPt", "dLbls", "trendline", "errBars", "cat", "val", "xVal", "yVal", "bubbleSize", "bubble3D", "shape", "smooth", "extLst"],
             "dPt" => ["dLbls", "trendline", "errBars", "cat", "val", "xVal", "yVal", "bubbleSize", "bubble3D", "shape", "smooth", "extLst"],
             "invertIfNegative" => ["pictureOptions", "dPt", "dLbls", "trendline", "errBars", "cat", "val", "xVal", "yVal", "bubbleSize", "bubble3D", "shape", "smooth", "extLst"],
             // CT_PieSer / CT_DoughnutSer: idx, order, tx?, spPr?, explosion?, dPt*, dLbls?, cat?, val?

@@ -2239,10 +2239,17 @@ internal static partial class ChartHelper
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
                     if (plotArea2 == null) { unsupported.Add(key); break; }
                     var varyVal = ParseHelpers.IsTruthy(value);
+                    // ECMA-376 declares varyColors on bar/bar3D, line/line3D,
+                    // area/area3D, pie/pie3D/ofPie/doughnut, radar, scatter and
+                    // bubble groups only; stockChart and surface/surface3DChart
+                    // have no such child and the validator rejects it there.
+                    var varyApplied = 0;
                     foreach (var ct in plotArea2.ChildElements
                         .Where(e => e.LocalName.Contains("Chart") || e.LocalName.Contains("chart"))
+                        .Where(e => e.LocalName is not ("stockChart" or "surfaceChart" or "surface3DChart"))
                         .OfType<OpenXmlCompositeElement>())
                     {
+                        varyApplied++;
                         ct.RemoveAllChildren<C.VaryColors>();
                         // ECMA-376: in every chart-type element (CT_BarChart,
                         // CT_LineChart, CT_PieChart, CT_AreaChart, ...) varyColors
@@ -2266,6 +2273,7 @@ internal static partial class ChartHelper
                         if (anchor != null) anchor.InsertAfterSelf(vc);
                         else ct.PrependChild(vc);
                     }
+                    if (varyApplied == 0) unsupported.Add(key);
                     break;
                 }
 
