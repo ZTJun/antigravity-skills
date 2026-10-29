@@ -785,7 +785,7 @@ public partial class WordHandler
           });
           if(sch>maxBodyH-sfH+2){settled=false;break;}
         }
-        if(settled){positionFootnotes();wrapFloats();applyLineNumbers();applyPageFilter();if(window._gridCols>0){layoutGrid(window._gridCols);}return;}
+        if(settled){positionFootnotes();wrapFloats();applyLineNumbers();applyPageFilter();if(window._gridCols>0){layoutGrid(window._gridCols);}else{flushScreenshotPage();}return;}
       }
     }
     for(var pi=0;pi<loopLim;pi++){
