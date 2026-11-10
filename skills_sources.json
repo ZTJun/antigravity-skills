@@ -11,10 +11,6 @@
                     "claude-api"
                 ],
                 "include": [
-                    "docx",
-                    "pptx",
-                    "xlsx",
-                    "pdf",
                     "doc-coauthoring",
                     "frontend-design",
                     "internal-comms",
@@ -358,6 +354,20 @@
                     ".git",
                     ".github",
                     ".gitignore",
+                    ".DS_Store"
+                ]
+            }
+        ]
+    },
+    {
+        "name": "pdfkit-py",
+        "repo_url": "https://github.com/SeaWork-Labs/pdfkit-py.git",
+        "branch": "main",
+        "copy_rules": [
+            {
+                "source": "skills/pdfkit-py/payload",
+                "dest": "skills/pdfkit-py",
+                "exclude": [
                     ".DS_Store"
                 ]
             }

@@ -38,7 +38,7 @@ To maintain consistency, a skill prompt should follow this standard Markdown str
 
 ---
 
-## 🚀 Integrated Skills Catalog (Total: 83)
+## 🚀 Integrated Skills Catalog (Total: 79)
 
 ### 🎨 Creative & Design
 These skills focus on visual expression, UI/UX design, and artistic creation.
@@ -93,10 +93,10 @@ These skills are used for handling professional documents and office needs in va
 *   **`@[obsidian-bases]`**: Create and edit Obsidian Bases (`.base`) files with views, filters, formulas, and summaries.
 *   **`@[obsidian-cli]`**: Interact with Obsidian vaults using the Obsidian CLI from the command line.
 *   **`@[defuddle]`**: Extract clean markdown content from web pages using Defuddle CLI, removing clutter and navigation.
-*   **`@[docx]`**: Create, edit, and analyze Word documents.
-*   **`@[xlsx]`**: Create, edit, and analyze Excel spreadsheets (supporting formulas and charts).
-*   **`@[pptx]`**: Create and modify PowerPoint presentations.
-*   **`@[pdf]`**: Process PDF documents (extracting text, merging/splitting, filling forms).
+*   **`@[minimax-docx]`**: Create, edit, and format DOCX via OpenXML SDK (.NET) with XSD validation (OOXML-compliant WordprocessingML).
+*   **`@[minimax-xlsx]`**: Create, read, analyze, edit, and validate Excel spreadsheets with zero format loss.
+*   **`@[pptx-generator]`**: Generate, edit, and read PowerPoint presentations via PptxGenJS and XML workflows.
+*   **`@[pdfkit-py]`**: Pure-Python PDF toolkit (~50 commands) covering reading, editing, conversion, forms, encryption, OCR — PyMuPDF backend with CJK support.
 *   **`@[internal-comms]`**: Draft corporate internal communication documents (weekly reports, announcements, FAQs).
 *   **`@[notebooklm]`**: Query Google NotebookLM notebooks for definitive, document-grounded answers.
 *   **`@[baoyu-youtube-transcript]`**: Fetch and process YouTube video transcripts.

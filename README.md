@@ -10,7 +10,7 @@
 
 ```
 .
-├── skills/             # ★ 模块化技能库（82 个活跃技能）
+├── skills/             # ★ 模块化技能库（79 个活跃技能）
 ├── archived/           # ★ 归档区（仍保留上游同步）
 │   ├── skills/         #   13 个低频技能（发布/漫画/封面/Obsidian 等）
 │   ├── docs/           #   旧版手册备份（中英双版）
@@ -42,7 +42,7 @@
 以下为 fork 后相对原仓库的改动：
 
 ### 归档整理（archived/）
-- **低频技能归档**（13 个，仍随上游同步到 `archived/skills/`）：`baoyu-post-to-wechat/-weibo/-x`（发布类）、`baoyu-comic`、`baoyu-article-illustrator`（漫画配图）、`baoyu-cover-image`、`baoyu-image-cards`、`baoyu-xhs-images`（封面卡片）、`baoyu-compress-image`、`bdi-mental-states`、`obsidian-cli/-markdown/-bases`
+- **低频技能归档**（17 个，仍随上游同步到 `archived/skills/`）：`baoyu-post-to-wechat/-weibo/-x`（发布类）、`baoyu-comic`、`baoyu-article-illustrator`（漫画配图）、`baoyu-cover-image`、`baoyu-image-cards`、`baoyu-xhs-images`（封面卡片）、`baoyu-compress-image`、`bdi-mental-states`、`obsidian-cli/-markdown/-bases`、`docx`/`pptx`/`xlsx`/`pdf`（anthropic 办公四件套，已由 minimax-*/pdfkit-py 平替，不再同步）
 - **文档归档**：旧版双语文档、CHANGELOG、CONTRIBUTING、CLAUDE.md、GEMINI.md
 - `claude-api` 已移出仓库，独立存放，不再随本仓库同步
 
@@ -57,11 +57,11 @@
 
 ---
 
-## 🧩 技能分类速览（82 个活跃技能）
+## 🧩 技能分类速览（79 个活跃技能）
 
 | 类别 | 数量 | 示例 |
 |---|---|---|
-| 文档办公 | 8 | docx / pptx / xlsx / pdf / OfficeCli / minimax-docx / minimax-xlsx / pptx-generator |
+| 文档办公 | 5 | OfficeCli / minimax-docx / minimax-xlsx / pptx-generator / pdfkit-py |
 | 设计创作 | 8 | canvas-design / theme-factory / ui-ux-pro-max |
 | Agent 流程（superpowers） | 14 | brainstorming / TDD / debugging |
 | 上下文工程（context-engineering） | 16 | context-* / evaluation / memory-systems |
@@ -130,7 +130,7 @@ bash scripts/sync_skills.sh <source-name>
 | officecli | iOfficeAI/OfficeCLI | skills/OfficeCli |
 | anysearch | anysearch-ai/anysearch-skill | skills/anysearch-skill |
 | notebooklm / planning-with-files / vercel-labs / supabase / remotion | 各自上游 | skills/ |
-| minimax-docx / minimax-xlsx / pptx-generator | SeaWork-Labs | skills/ |
+| minimax-docx / minimax-xlsx / pptx-generator / pdfkit-py | SeaWork-Labs | skills/ |
 | lieflat-less-ai-tone | larashero3-dotcom | skills/ |
 
 ---
@@ -192,6 +192,14 @@ bash scripts/sync_skills.sh <source-name>
 安装路径（未执行）：`npm i -g @jackwener/opencli`（需 Node ≥20.18.1）→ Chrome Web Store 装扩展 → `opencli doctor`。建议把扩展装在**专用 Chrome Profile + 小号**——profile 本身就是隔离边界。官方另有 OpenCLIApp 桌面版（托盘 UI + 托管更新）。
 
 结论：**暂不装**，但它是日后做"登录态站点访问"（小红书等）的首选实现，优先级高于 Agent-Reach。
+
+### veraPDF（PDF/A 合规校验 CLI，未装）
+
+ISO 19005（PDF/A）与 PDF/UA（ISO 14289）校验的参考实现（EU 资助、Open Preservation Foundation 维护），政府/图书馆归档场景事实标准。`brew install verapdf` 即可。
+
+用途：校验欧盟/政府归档公文是否真正符合 PDF/A，或转换后验证产出合规。
+
+结论：**暂不装**——pdfkit-py 已覆盖日常 PDF 处理（PyMuPDF + OCR + 表单）；仅当需要 ISO 19005 合规验证时再启用。
 
 ---
 

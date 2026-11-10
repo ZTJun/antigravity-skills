@@ -9,7 +9,7 @@
 | 目标目录 | 客户端 | 数量 | 同步方式 | 说明 |
 |---|---|---|---|---|
 | `~/.claude/skills` | Claude Code（Devin/Windsurf 亦兼容读取） | 77 | 手动 / `oah enable -g -t claude` | 未链 `anysearch-skill`（见下文）；`claude-api` 为独立实体目录，不在本仓库 |
-| `~/.agents/skills` | 通用目录（配套 AGENTS.md 约定） | 78 | 手动脚本（见下） | 全量链接 |
+| `~/.agents/skills` | 通用目录（配套 AGENTS.md 约定） | 79 | 手动脚本（见下） | 全量链接 |
 | `~/.config/opencode/skills` | opencode 全局 | 78 | 手动脚本 / `oah enable -g -t opencode` | oah target 约定即 `~/.config/opencode` |
 | `~/.zcode/skills` | zcode | 73 | `zsh ~/.zcode/skills-sync.sh` | 有 SKIP 列表（见下） |
 | `~/.gemini/config/plugins/customs/skills` | Gemini 自定义插件 | 35 | 手动 | **旧快照，未全量同步**，需要时可按通用脚本补齐 |
