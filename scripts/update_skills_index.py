@@ -15,11 +15,20 @@ def extract_description(skill_path):
     try:
         with open(skill_md_path, "r", encoding="utf-8") as f:
             content = f.read(1000) # Read first 1000 chars
-            
+
             # Try to find description in YAML frontmatter
             match = re.search(r'^description:\s*(.+)$', content, re.MULTILINE)
             if match:
                 desc = match.group(1).strip()
+                # Block scalar (| or >): read following indented lines
+                if re.fullmatch(r'[|>][+-]?', desc):
+                    block = []
+                    for line in content[match.end():].splitlines()[1:]:
+                        if line.strip() and not line[0].isspace():
+                            break
+                        if line.strip():
+                            block.append(line.strip())
+                    return re.sub(r'\s+', ' ', ' '.join(block)).strip()
                 # Remove quotes if present
                 if (desc.startswith('"') and desc.endswith('"')) or (desc.startswith("'") and desc.endswith("'")):
                     desc = desc[1:-1].strip()

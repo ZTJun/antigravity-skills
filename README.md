@@ -10,7 +10,7 @@
 
 ```
 .
-├── skills/             # ★ 模块化技能库（78 个活跃技能）
+├── skills/             # ★ 模块化技能库（82 个活跃技能）
 ├── archived/           # ★ 归档区（仍保留上游同步）
 │   ├── skills/         #   13 个低频技能（发布/漫画/封面/Obsidian 等）
 │   ├── docs/           #   旧版手册备份（中英双版）
@@ -57,17 +57,17 @@
 
 ---
 
-## 🧩 技能分类速览（78 个活跃技能）
+## 🧩 技能分类速览（82 个活跃技能）
 
 | 类别 | 数量 | 示例 |
 |---|---|---|
-| 文档办公 | 5 | docx / pptx / xlsx / pdf / OfficeCli |
+| 文档办公 | 8 | docx / pptx / xlsx / pdf / OfficeCli / minimax-docx / minimax-xlsx / pptx-generator |
 | 设计创作 | 8 | canvas-design / theme-factory / ui-ux-pro-max |
 | Agent 流程（superpowers） | 14 | brainstorming / TDD / debugging |
 | 上下文工程（context-engineering） | 16 | context-* / evaluation / memory-systems |
 | 内容创作（baoyu） | 14 | translate / image-gen / diagram / wechat-summary |
 | 科学文献（science-skills） | 5 | literature_search_arxiv / openalex / uv / pymol / workflow_skill_creator |
-| 其他 | 16 | anysearch / notebooklm / react-* / supabase / defuddle / json-canvas / remotion |
+| 其他 | 17 | anysearch / notebooklm / react-* / supabase / defuddle / json-canvas / remotion / lieflat-less-ai-tone |
 
 ---
 
@@ -130,6 +130,68 @@ bash scripts/sync_skills.sh <source-name>
 | officecli | iOfficeAI/OfficeCLI | skills/OfficeCli |
 | anysearch | anysearch-ai/anysearch-skill | skills/anysearch-skill |
 | notebooklm / planning-with-files / vercel-labs / supabase / remotion | 各自上游 | skills/ |
+| minimax-docx / minimax-xlsx / pptx-generator | SeaWork-Labs | skills/ |
+| lieflat-less-ai-tone | larashero3-dotcom | skills/ |
+
+---
+
+## 📝 备选工具备忘（未安装）
+
+以下项目调研后暂未纳入技能库，仅作备选记录（workaround）。
+
+### ruin-everything（浏览器自动化 MCP）
+
+本地共享 Chrome 运行时，通过 CDP（`127.0.0.1:9222`）+ stdio MCP 暴露浏览器工具（`ruin_browser`、`ruin_auto_register` 等）。主打求职网站（Greenhouse/Ashby/Workday/飞书招聘）与学术机构 SSO（IEEE/ACM/Springer 经大学登录）适配器。
+
+```json
+{
+  "mcpServers": {
+    "ruin-everything": {
+      "command": "uvx",
+      "args": ["--isolated", "--refresh", "--from", "ruin-everything[mcp]", "ruin-mcp"],
+      "env": { "RUIN_AUTO_UPDATE": "0" }
+    }
+  }
+}
+```
+
+风险与限制：
+
+- `~/.ruin/identity.json` 明文存储账号密码
+- 读取 macOS 短信数据库抓取验证码（需授权 Messages）
+- 内置滑块/拼图验证码绕过，存在平台 ToS 风险
+- 与 Playwright MCP 功能重叠；早期项目，star 数少
+- `uvx --refresh` 每次启动拉取最新代码，建议锁定版本
+
+结论：仅当需要"持久化共享 Chrome profile + 求职/学术专用适配器"时再启用；纯浏览器自动化用 Playwright MCP 即可。
+
+### Agent-Reach（站点访问聚合 CLI，未装）
+
+"让 Agent 够得上登录态互联网"的聚合壳：每个渠道 = 上游工具有序列表（opencli / bili-cli / yt-dlp / Jina Reader / Exa / boss-agent-cli）。**小红书渠道 = 直接调 `opencli xiaohongshu search|note|comments`**，Agent-Reach 只提供专用浏览器、cookie 复制与错误码归一化。
+
+风险：
+
+- 作者可信度存疑；夹带 CloakBrowser 闭源浏览器二进制（非 MIT）
+- OpenCLI Bridge 扩展会复制主 Chrome 站点 cookie 到专用浏览器（不装扩展即可掐断该链路）
+- ⚠️ PyPI 上的 `agent-reach` 是冒名包，安装只认 GitHub Releases zip（`uv tool install .../agent-reach.zip`）
+
+隔离方案（如日后要装）：`sandbox-exec` deny-list 包装 CLI（挡 Keychains/Chrome profile/.ssh/.aws/短信库/Mail/IM 容器/`.env` 等），不装 Chrome 扩展改用 `agent-reach login` 在专用浏览器登小号，锁 release 版本。容器/独立 macOS 用户方案会废掉 login GUI 渠道。
+
+结论：**不装**。与 AnySearch 重合度低但非刚需；需要小红书搜索时直接用 OpenCLI。
+
+### OpenCLI（jackwener，CLI+daemon，未装）
+
+与 `wx-cli` 同作者（31k star，Apache-2.0），"把任意网站变成 CLI"：npm 包 + Browser Bridge Chrome 扩展 + 懒启动本地 daemon（`localhost:19825`）+ 官方 agent skills（`npx skills add jackwener/opencli`）。100+ 站点内置适配器（小红书 `search/note/comments` 等 15 个命令），输出统一 `{ok, data}` JSON；另有通用 `opencli browser` 原语。
+
+评估：
+
+- 扩展声明纯 localhost、无遥测、cookie 按域名按需读取不离开 Chrome（PRIVACY.md；npm 包本体不在声明范围）
+- ⚠️ 含写命令（`publish`/`like`/`comment`/`follow`/`reply-dm`），误用或恶意适配器可借登录态发帖
+- daemon 监听 localhost:19825，本机其他进程理论上可驱动
+
+安装路径（未执行）：`npm i -g @jackwener/opencli`（需 Node ≥20.18.1）→ Chrome Web Store 装扩展 → `opencli doctor`。建议把扩展装在**专用 Chrome Profile + 小号**——profile 本身就是隔离边界。官方另有 OpenCLIApp 桌面版（托盘 UI + 托管更新）。
+
+结论：**暂不装**，但它是日后做"登录态站点访问"（小红书等）的首选实现，优先级高于 Agent-Reach。
 
 ---
 

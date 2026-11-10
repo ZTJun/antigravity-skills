@@ -303,5 +303,64 @@
                 ]
             }
         ]
+    },
+    {
+        "name": "minimax-docx",
+        "repo_url": "https://github.com/SeaWork-Labs/minimax-docx.git",
+        "branch": "main",
+        "copy_rules": [
+            {
+                "source": "skills/minimax-docx/payload",
+                "dest": "skills/minimax-docx",
+                "exclude": [
+                    ".DS_Store"
+                ]
+            }
+        ]
+    },
+    {
+        "name": "minimax-xlsx",
+        "repo_url": "https://github.com/SeaWork-Labs/minimax-xlsx.git",
+        "branch": "main",
+        "copy_rules": [
+            {
+                "source": "skills/minimax-xlsx/payload",
+                "dest": "skills/minimax-xlsx",
+                "exclude": [
+                    ".DS_Store"
+                ]
+            }
+        ]
+    },
+    {
+        "name": "pptx-generator",
+        "repo_url": "https://github.com/SeaWork-Labs/pptx-generator.git",
+        "branch": "main",
+        "copy_rules": [
+            {
+                "source": "skills/pptx-generator/payload",
+                "dest": "skills/pptx-generator",
+                "exclude": [
+                    ".DS_Store"
+                ]
+            }
+        ]
+    },
+    {
+        "name": "lieflat-less-ai-tone",
+        "repo_url": "https://github.com/larashero3-dotcom/lieflat-less-ai-tone.git",
+        "branch": "main",
+        "copy_rules": [
+            {
+                "source": ".",
+                "dest": "skills/lieflat-less-ai-tone",
+                "exclude": [
+                    ".git",
+                    ".github",
+                    ".gitignore",
+                    ".DS_Store"
+                ]
+            }
+        ]
     }
 ]
