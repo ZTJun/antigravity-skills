@@ -193,14 +193,6 @@ bash scripts/sync_skills.sh <source-name>
 
 结论：**暂不装**，但它是日后做"登录态站点访问"（小红书等）的首选实现，优先级高于 Agent-Reach。
 
-### veraPDF（PDF/A 合规校验 CLI，未装）
-
-ISO 19005（PDF/A）与 PDF/UA（ISO 14289）校验的参考实现（EU 资助、Open Preservation Foundation 维护），政府/图书馆归档场景事实标准。`brew install verapdf` 即可。
-
-用途：校验欧盟/政府归档公文是否真正符合 PDF/A，或转换后验证产出合规。
-
-结论：**暂不装**——pdfkit-py 已覆盖日常 PDF 处理（PyMuPDF + OCR + 表单）；仅当需要 ISO 19005 合规验证时再启用。
-
 ---
 
 ## 🛡️ 安全
