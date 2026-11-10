@@ -82,3 +82,10 @@ done
 - **Finder 副本污染**：手动复制目录会产生 `xxx 2.md` / `xxx 2/` 副本，提交前 `find skills -name '* 2*'` 清一遍。
 - **重复触发**：同功能 skill 并存会争夺触发（如新旧两套 office skill），保留一套、其余归档。
 - **JIT 依赖**：skill 首次调用可能跑 setup（下载运行时/字体），装 skill 时注意其 setup 脚本行为。
+
+## 已知初始化问题（2026-11-10 验证）
+
+- **pdfkit-py `setup.sh`**：`_find_python` 取 PATH 第一个 `python3`——若解析到 uv 托管的 Python（`~/.local/bin/python3`），`venv` 会因缺 ensurepip 失败。修复：`PATH="/opt/homebrew/bin:$PATH" bash scripts/setup.sh`。homebrew Python 3.15 可正常建 venv。
+- **minimax-docx 验证测试**：CLI 目标框架 net8.0，仅装 .NET 10 时 `dotnet run` 报框架缺失。修复：`DOTNET_ROLL_FORWARD=LatestMajor`（或装 .NET 8 运行时）。已验证 `create` 可正常产 docx。
+- **minimax-xlsx**：无独立运行时，`uv run --with pandas --with openpyxl` 即可。
+- **pptx-generator**：需 `pptxgenjs`（npm 全局）+ `markitdown`（`uv run --with markitdown`）。
