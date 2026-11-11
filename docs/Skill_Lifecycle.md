@@ -89,3 +89,4 @@ done
 - **minimax-docx 验证测试**：CLI 目标框架 net8.0，仅装 .NET 10 时 `dotnet run` 报框架缺失。修复：`DOTNET_ROLL_FORWARD=LatestMajor`（或装 .NET 8 运行时）。已验证 `create` 可正常产 docx。
 - **minimax-xlsx**：无独立运行时，`uv run --with pandas --with openpyxl` 即可。
 - **pptx-generator**：需 `pptxgenjs`（npm 全局）+ `markitdown`（`uv run --with markitdown`）。
+- **minimax-docx `triggers` 字段**：上游 SKILL.md 把 `triggers` 误用为关键词列表，但 Devin 只认 `user`/`model` 枚举——非法值导致技能完全不可见。本地已删除该字段；**上游 sync 会回灌**，若技能消失请重新移除（或推动上游修复）。
