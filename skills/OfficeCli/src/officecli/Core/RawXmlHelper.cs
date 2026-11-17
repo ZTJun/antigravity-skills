@@ -627,6 +627,13 @@ internal static class RawXmlHelper
         // original package on disk (the in-memory clone re-serializes a healthy
         // Content_Types, so the defect is only visible in the source file).
         errors.AddRange(DetectMissingDefaultRelsContentType(package, filePath));
+        // Cross-format OPC structural check: an <Override PartName> whose part is
+        // absent from the zip. The SDK validator only checks the XML of parts
+        // that exist, so the loss goes unreported — and Word, for one, opens a
+        // docx without styles.xml with no prompt and renders every styled
+        // paragraph as plain text. Compared on disk for the same reason as the
+        // rels check above.
+        errors.AddRange(DetectMissingContentTypeOverrideParts(filePath));
         // Spreadsheet-only: a ref/sqref shifted past row 1048576 / column XFD is
         // schema-legal but makes Excel refuse the workbook (0x800A03EC).
         errors.AddRange(DetectOutOfGridSheetRefs(clone));
@@ -932,6 +939,75 @@ internal static class RawXmlHelper
                 + "(\"the file may be corrupt\"). Add the <Default Extension=\"rels\" ...> "
                 + "entry to [Content_Types].xml to make the package openable.",
                 null, "/[Content_Types].xml"));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Cross-format OPC structural check: every <c>&lt;Override PartName&gt;</c> in
+    /// <c>[Content_Types].xml</c> must name a part that is actually in the zip.
+    /// A manifest that still declares a part whose entry is gone passes schema
+    /// validation (the SDK validates only the parts it can load), yet the
+    /// content the part carried is gone — Word opens a docx missing
+    /// <c>word/styles.xml</c> with no repair prompt and renders every styled
+    /// paragraph as plain text. Flag each such override so the loss is visible.
+    ///
+    /// Part names are compared case-insensitively, as OPC requires and Office
+    /// does: <c>/word/Styles.xml</c> declared against a <c>word/styles.xml</c>
+    /// entry is a healthy package.
+    ///
+    /// Reads the source zip on disk with <see cref="FileShare.ReadWrite"/> so it
+    /// coexists with the SDK's own handle (resident mode keeps the file open
+    /// editable). Returns an empty list when the file or manifest cannot be
+    /// read — never a false positive.
+    /// </summary>
+    private static List<ValidationError> DetectMissingContentTypeOverrideParts(string? filePath)
+    {
+        var result = new List<ValidationError>();
+        if (filePath == null) return result;
+
+        try
+        {
+            using var fs = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var zip = new ZipArchive(fs, ZipArchiveMode.Read);
+            var manifestEntry = zip.Entries.FirstOrDefault(e =>
+                e.FullName.Equals("[Content_Types].xml", StringComparison.OrdinalIgnoreCase));
+            if (manifestEntry == null) return result;
+
+            // Directory entries have an empty Name; they are not parts.
+            var entryNames = new HashSet<string>(
+                zip.Entries
+                    .Where(e => !string.IsNullOrEmpty(e.Name))
+                    .Select(e => Uri.UnescapeDataString(e.FullName.TrimStart('/'))),
+                StringComparer.OrdinalIgnoreCase);
+
+            System.Xml.Linq.XDocument doc;
+            using (var ms = manifestEntry.Open())
+                doc = System.Xml.Linq.XDocument.Load(ms);
+
+            System.Xml.Linq.XNamespace ct =
+                "http://schemas.openxmlformats.org/package/2006/content-types";
+            var reported = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var over in doc.Descendants(ct + "Override"))
+            {
+                var partName = (string?)over.Attribute("PartName");
+                if (string.IsNullOrWhiteSpace(partName)) continue;
+                var zipName = Uri.UnescapeDataString(partName.TrimStart('/'));
+                if (entryNames.Contains(zipName) || !reported.Add(zipName)) continue;
+
+                result.Add(new ValidationError(
+                    "PackageStructure",
+                    $"[Content_Types].xml declares part '{partName}', but the package "
+                    + "contains no such part, so whatever it carried is lost (Word opens "
+                    + "a document missing its styles part without any prompt and drops "
+                    + "the styling). Restore the part, or remove its <Override> and every relationship "
+                    + "that targets it.",
+                    null, "/[Content_Types].xml"));
+            }
+        }
+        catch
+        {
+            // Unreadable zip/manifest: leave to the other checks; don't guess.
         }
         return result;
     }

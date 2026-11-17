@@ -96,7 +96,7 @@ internal class WatchServer : IDisposable
     {
         var core = LoadWatchResource("Resources.watch-sse-core.js");
         var overlay = LoadWatchResource("Resources.watch-overlay.js");
-        return $"<script>\n{core}\n</script>\n<script>\n{overlay}\n</script>";
+        return $"<script{PreviewCsp.NonceAttr}>\n{core}\n</script>\n<script{PreviewCsp.NonceAttr}>\n{overlay}\n</script>";
     });
 
     // Test access: allows tests to verify SSE script content without reflection on a const field.
@@ -136,7 +136,7 @@ internal class WatchServer : IDisposable
         _idleTimeout = idleTimeout ?? ResolveIdleTimeout();
         _tcpListener = new TcpListener(IPAddress.Loopback, _port);
         if (!string.IsNullOrEmpty(initialHtml))
-            _currentHtml = initialHtml;
+            _currentHtml = PreviewCsp.Rebind(initialHtml, PreviewCsp.ExtractNonce(initialHtml), PreviewCsp.Nonce);
     }
 
     public static string GetWatchPipeName(string filePath)
@@ -669,6 +669,13 @@ internal class WatchServer : IDisposable
         {
             var msg = JsonSerializer.Deserialize(json, WatchMessageJsonContext.Default.WatchMessage);
             if (msg == null) return;
+
+            // The HTML was rendered by another process under ITS script nonce.
+            // The browser tab enforces this server's nonce, so re-stamp before
+            // the HTML is cached, diffed or pushed to clients.
+            var senderNonce = msg.Nonce ?? PreviewCsp.ExtractNonce(msg.FullHtml);
+            if (msg.FullHtml != null) msg.FullHtml = PreviewCsp.Rebind(msg.FullHtml, senderNonce, PreviewCsp.Nonce);
+            if (msg.Html != null) msg.Html = PreviewCsp.Rebind(msg.Html, senderNonce, PreviewCsp.Nonce);
 
             // Scroll-only event: broadcast a CSS selector to all SSE clients
             // without touching the cached HTML, version, or marks. Used by the
@@ -2037,7 +2044,10 @@ internal class WatchServer : IDisposable
 
             // Default: serve current HTML (GET / and everything else)
             var html = string.IsNullOrEmpty(_currentHtml)
-                ? InjectSseScript(WaitingHtml)
+                // The waiting page gets the policy too: the tab never reloads when
+                // the first real render arrives (the body is swapped in place), so
+                // whatever policy this first response carries is the tab's policy.
+                ? InjectSseScript(WaitingHtml.Replace("<meta charset=\"utf-8\">", "<meta charset=\"utf-8\">" + PreviewCsp.MetaTag))
                 : InjectSseScript(_currentHtml);
             var bodyBytes = Encoding.UTF8.GetBytes(html);
             var header = Encoding.UTF8.GetBytes(
@@ -2092,18 +2102,44 @@ internal class WatchServer : IDisposable
         return _allowedHosts.Contains(ExtractHostname(host));
     }
 
+    private static readonly HashSet<string> _builtinLoopbackHosts =
+        new(StringComparer.OrdinalIgnoreCase) { "localhost", "127.0.0.1", "[::1]", "::1" };
+
     /// <summary>
-    /// True if a state-changing request's Origin is absent or names a loopback host.
-    /// Absent Origin (server-side proxy hop, or a same-origin navigation that omits
-    /// it) is allowed; a present cross-origin Origin is rejected (CSRF defense).
+    /// True if a state-changing request may proceed given its Origin.
+    /// Absent Origin (a non-browser client, or a same-origin navigation that
+    /// omits it) is allowed. A present Origin must be the SAME ORIGIN the
+    /// request was addressed to — same host and same port as the Host header.
+    /// Comparing the hostname alone treated every local web server as this
+    /// one: a page served from http://localhost:9999 is a different origin
+    /// from the preview on http://localhost:26315, yet it could POST to
+    /// /api/batch. The one exception is a host the user configured through
+    /// OFFICECLI_WATCH_ALLOWED_HOSTS (a reverse proxy, where the browser's
+    /// Origin is the proxy and Host may be rewritten); built-in loopback
+    /// names never take that exception. Scheme is not compared, so a
+    /// TLS-terminating proxy keeps working.
     /// </summary>
     internal static bool IsOriginAllowed(Dictionary<string, string> headers)
     {
         if (!headers.TryGetValue("Origin", out var origin) || string.IsNullOrWhiteSpace(origin))
             return true;
-        if (Uri.TryCreate(origin.Trim(), UriKind.Absolute, out var u))
-            return _allowedHosts.Contains(u.Host) || _allowedHosts.Contains($"[{u.Host}]");
-        return false;
+        if (!Uri.TryCreate(origin.Trim(), UriKind.Absolute, out var u) || string.IsNullOrEmpty(u.Host))
+            return false;
+
+        var originHost = u.HostNameType == UriHostNameType.IPv6 && !u.Host.StartsWith('[') ? $"[{u.Host}]" : u.Host;
+        if (!_allowedHosts.Contains(originHost)) return false;
+
+        if (headers.TryGetValue("Host", out var hostHeader) && !string.IsNullOrWhiteSpace(hostHeader))
+        {
+            var reqHost = ExtractHostname(hostHeader);
+            var rest = hostHeader.Trim()[reqHost.Length..];
+            var reqPort = rest.StartsWith(':') && int.TryParse(rest[1..], out var hp) ? hp : 80;
+            if (string.Equals(originHost, reqHost, StringComparison.OrdinalIgnoreCase) && u.Port == reqPort)
+                return true;
+        }
+
+        // Not the same origin: only an explicitly configured proxy host passes.
+        return !_builtinLoopbackHosts.Contains(originHost);
     }
 
     private static string ForbiddenHostMessage(Dictionary<string, string> headers)
@@ -2697,6 +2733,8 @@ internal class WatchServer : IDisposable
                     throw new InvalidOperationException(reason);
                 }
                 html = await File.ReadAllTextAsync(tmpOut, token);
+                // Rendered by a child process under its own script nonce.
+                html = PreviewCsp.Rebind(html, PreviewCsp.ExtractNonce(html), PreviewCsp.Nonce);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

@@ -183,6 +183,8 @@ public partial class WordHandler
         sb.AppendLine($"<html lang=\"{HtmlEncode(htmlLang)}\"{dirAttr}>");
         sb.AppendLine("<head>");
         sb.AppendLine("<meta charset=\"UTF-8\">");
+        // First thing after the charset: a meta policy only governs what follows.
+        sb.AppendLine(Core.PreviewCsp.MetaTag);
         sb.AppendLine("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
         sb.AppendLine($"<title>{HtmlEncode(Path.GetFileName(_filePath))}</title>");
         var pgLayout = GetPageLayout();
@@ -257,7 +259,7 @@ public partial class WordHandler
                 // Sanitized names contain only letters/digits/space/.-_ so plain
                 // quote-wrapping is JSON-safe (no escapable characters survive).
                 var famJson = "[" + string.Join(",", webFontCandidates.Select(f => $"\"{f}\"")) + "]";
-                sb.AppendLine("<script>(function(){");
+                sb.AppendLine($"<script{Core.PreviewCsp.NonceAttr}>(function(){{");
                 sb.AppendLine($"var fams={famJson};");
                 sb.AppendLine("function w(f,fb){var c=w.c||(w.c=document.createElement('canvas').getContext('2d'));c.font='72px '+(f?'\"'+f+'\",':'')+fb;return c.measureText('mmmmmmmmmmlliWW@#\\u5e05\\u6c38\\u306e\\ud55c').width;}");
                 sb.AppendLine("function has(f){try{return w(f,'monospace')!==w(null,'monospace')||w(f,'serif')!==w(null,'serif');}catch(e){return true;}}");
@@ -276,8 +278,7 @@ public partial class WordHandler
         if (hasMathFormulas)
         {
             // CONSISTENCY(katex-mirror): mirror-first with CDN fallback chain — see Core/KatexAssets.
-            sb.AppendLine($"<link rel=\"stylesheet\" href=\"{Core.KatexAssets.CssUrl}\" media=\"print\" onload=\"this.media='all'\" onerror=\"{Core.KatexAssets.CssOnErrorJs}\">");
-            sb.AppendLine($"<script defer src=\"{Core.KatexAssets.JsUrl}\" onerror=\"{Core.KatexAssets.JsOnErrorJs("document.querySelectorAll('.katex-formula').forEach(function(el){el.textContent=el.dataset.formula;el.style.fontFamily='monospace';el.style.color='#666'})")}\"></script>");
+            sb.AppendLine(Core.KatexAssets.HeadTags("document.querySelectorAll('.katex-formula').forEach(function(el){el.textContent=el.dataset.formula;el.style.fontFamily='monospace';el.style.color='#666'})"));
         }
         sb.AppendLine("</head>");
         sb.AppendLine("<body>");
@@ -442,6 +443,19 @@ public partial class WordHandler
             int firstSectIdxOnPage = sectMatches.Count > 0
                 ? int.Parse(sectMatches[0].Groups[1].Value)
                 : -1;
+            // A page that OPENS with an oddPage/evenPage section must land on a
+            // page number of that parity; Word inserts a blank page before it
+            // when the running count says otherwise. The final page numbers are
+            // only known after client-side pagination, so tag the wrapper and
+            // let the paginator insert the blank (applyParityFillers).
+            string sectionStartAttr = "";
+            if (firstSectIdxOnPage > 0 && firstSectIdxOnPage < sections.Count
+                && pgContent.TrimStart().StartsWith($"<!--SECT:{firstSectIdxOnPage}-->", StringComparison.Ordinal))
+            {
+                var startType = sections[firstSectIdxOnPage].GetFirstChild<SectionType>()?.Val?.Value;
+                if (startType == SectionMarkValues.OddPage) sectionStartAttr = " data-section-start=\"odd\"";
+                else if (startType == SectionMarkValues.EvenPage) sectionStartAttr = " data-section-start=\"even\"";
+            }
             if (sectMatches.Count > 0)
             {
                 var lastIdx = int.Parse(sectMatches[^1].Groups[1].Value);
@@ -521,7 +535,7 @@ public partial class WordHandler
                         $" data-line-num-restart=\"{restart}\"";
                 }
             }
-            sb.AppendLine($"<div class=\"page-wrapper\" data-section=\"{i + 1}\" data-section-idx=\"{activeSectionIdx}\"{lineNumAttrs}>");
+            sb.AppendLine($"<div class=\"page-wrapper\" data-section=\"{i + 1}\" data-section-idx=\"{activeSectionIdx}\"{sectionStartAttr}{lineNumAttrs}>");
             sb.AppendLine($"<div class=\"page\" data-page=\"{i + 1}\" style=\"{pageStyle}\">");
             // #3: per-page header/footer selection. titlePg → first-page
             // variant; evenAndOddHeaders + even-numbered page → even
@@ -603,7 +617,7 @@ public partial class WordHandler
 
         // Auto-pagination script: split overflowing pages and KaTeX rendering
         var bodyHeightPt = pgLayout.HeightPt - pgLayout.MarginTopPt - pgLayout.MarginBottomPt;
-        sb.AppendLine("<script>");
+        sb.AppendLine($"<script{Core.PreviewCsp.NonceAttr}>");
         sb.AppendLine("function _wordInit(){");
         sb.AppendLine("  if(typeof katex!=='undefined'){");
         sb.AppendLine("    document.querySelectorAll('.katex-formula:not(.katex-rendered)').forEach(function(el){");
@@ -757,6 +771,34 @@ public partial class WordHandler
     var base=topMarginPx;
     var pad=needed>base?needed:base;
     page.style.paddingTop=pad+'px';
+  }
+  // oddPage / evenPage sections: the section's first page must have that
+  // parity, so Word puts a blank page in front of it when the running page
+  // count would give the other one. Rebuilt from scratch on every pass —
+  // an earlier page splitting flips the parity of everything after it.
+  function applyParityFillers(){
+    document.querySelectorAll('.page-wrapper[data-parity-filler]').forEach(function(w){w.remove();});
+    var count=0,prev=null;
+    Array.from(document.querySelectorAll('.page-wrapper')).forEach(function(w){
+      var want=w.getAttribute('data-section-start');
+      if(want&&prev&&((want==='odd')!==((count+1)%2===1))){
+        var fw=document.createElement('div');
+        fw.className='page-wrapper';
+        fw.setAttribute('data-parity-filler','1');
+        var fp=document.createElement('div');
+        fp.className='page';
+        var pp=prev.querySelector('.page');
+        if(pp)fp.style.cssText=pp.style.cssText;
+        var fb=document.createElement('div');
+        fb.className='page-body';
+        fp.appendChild(fb);
+        fw.appendChild(fp);
+        w.before(fw);
+        count++;
+      }
+      count++;
+      prev=w;
+    });
   }
   function paginate(){
     // Reflow tall headers BEFORE measuring body overflow so the pushed-down
@@ -1037,6 +1079,7 @@ public partial class WordHandler
         else page.after(nw);
       }
     }
+    applyParityFillers();
     // Renumber pages
     var allPages=document.querySelectorAll('.page');
     allPages.forEach(function(p,i){
@@ -2694,9 +2737,31 @@ public partial class WordHandler
                 // pointed at a later section than the page's real owner —
                 // flipping page-1 header/footer selection to the wrong
                 // section's variant.
-                var sectTypeVal = prevInlineSectPr.GetFirstChild<SectionType>()?.Val?.Value;
-                if (sectTypeVal != SectionMarkValues.Continuous
-                    && sectTypeVal != SectionMarkValues.NextColumn)
+                //
+                // The type that decides this is the one on the section being
+                // ENTERED: a sectPr's <w:type> says how its own section starts
+                // (§17.6.22), not how the next one does. Reading it off the
+                // sectPr that closes the section being left shifted every break
+                // by one section — a trailing `continuous` section after a
+                // nextPage one got a page of its own.
+                //
+                // A continuous section whose page size or orientation differs
+                // from the section before it cannot share that page, so Word
+                // starts it on a new page regardless of its type.
+                var enteredSectPr = currentSectionIdx + 1 < allSections.Count
+                    ? allSections[currentSectionIdx + 1] : null;
+                var sectTypeVal = enteredSectPr?.GetFirstChild<SectionType>()?.Val?.Value;
+                bool staysOnPage = sectTypeVal == SectionMarkValues.Continuous
+                    || sectTypeVal == SectionMarkValues.NextColumn;
+                if (staysOnPage && enteredSectPr != null)
+                {
+                    var leftPage = GetPageLayoutFor(prevInlineSectPr);
+                    var enteredPage = GetPageLayoutFor(enteredSectPr);
+                    if (Math.Abs(leftPage.WidthPt - enteredPage.WidthPt) > 0.5
+                        || Math.Abs(leftPage.HeightPt - enteredPage.HeightPt) > 0.5)
+                        staysOnPage = false;
+                }
+                if (!staysOnPage)
                 {
                     sb.Append("<!--PAGE_BREAK-->");
                 }

@@ -279,6 +279,9 @@ static partial class CommandBuilder
                         if (nativeLock != null) { handler = nativeLock.Reopen(); wordHandlerGrid = (OfficeCli.Handlers.WordHandler)handler; }
                     }
                 }
+                // Word's own page count wins over the preview's: a page Word does
+                // not have is out of range in every render mode, never an HTML fallback.
+                OfficeCli.Core.NativeRenderFailure.ThrowIfPageOutOfRange(nativeFailure, pageFilter ?? sheet.NativePageSpec);
                 if (renderMode == "native" && directPng == null)
                     throw OfficeCli.Core.NativeRenderFailure.ToCliException("Word", nativeFailure);
                 if (directPng == null)
@@ -329,6 +332,9 @@ static partial class CommandBuilder
                         if (nativeLock != null) { handler = nativeLock.Reopen(); wordHandler = (OfficeCli.Handlers.WordHandler)handler; }
                     }
                 }
+                // Word's own page count wins over the preview's: a page Word does
+                // not have is out of range in every render mode, never an HTML fallback.
+                OfficeCli.Core.NativeRenderFailure.ThrowIfPageOutOfRange(nativeFailure, effectiveFilter);
                 if (renderMode == "native" && directPng == null)
                     throw OfficeCli.Core.NativeRenderFailure.ToCliException("Word", nativeFailure);
                 if (directPng == null)
@@ -467,7 +473,7 @@ static partial class CommandBuilder
                         // preview/screenshot temp writers in this file.
                         outPath = Path.Combine(Path.GetTempPath(), $"officecli_slide{slideNum}_{Path.GetFileNameWithoutExtension(Path.GetFileName(filePath))}_{DateTime.Now:HHmmss}_{Guid.NewGuid():N}.html");
                         // CONSISTENCY(katex-mirror): mirror-first with CDN fallback — see Core/KatexAssets.
-                        var html = $"<!DOCTYPE html><html><head><meta charset='UTF-8'><link rel='stylesheet' href='{OfficeCli.Core.KatexAssets.CssUrl}' onerror=\"{OfficeCli.Core.KatexAssets.CssOnErrorJs}\"><script defer src='{OfficeCli.Core.KatexAssets.JsUrl}' onerror=\"{OfficeCli.Core.KatexAssets.JsOnErrorJs("")}\"></script><style>body{{margin:0;display:flex;justify-content:center;background:#f0f0f0}}</style></head><body>{svg}<script>window.addEventListener('load',function(){{document.querySelectorAll('[data-formula]').forEach(function(el){{try{{katex.render(el.getAttribute('data-formula'),el,{{throwOnError:false,displayMode:true}})}}catch(e){{}}}})}})</script></body></html>";
+                        var html = $"<!DOCTYPE html><html><head><meta charset='UTF-8'>{OfficeCli.Core.PreviewCsp.MetaTag}{OfficeCli.Core.KatexAssets.HeadTags("")}<style>body{{margin:0;display:flex;justify-content:center;background:#f0f0f0}}</style></head><body>{svg}<script{OfficeCli.Core.PreviewCsp.NonceAttr}>window.addEventListener('load',function(){{document.querySelectorAll('[data-formula]').forEach(function(el){{try{{katex.render(el.getAttribute('data-formula'),el,{{throwOnError:false,displayMode:true}})}}catch(e){{}}}})}})</script></body></html>";
                         File.WriteAllText(outPath, html);
                     }
                     else

@@ -306,8 +306,13 @@ public partial class PowerPointHandler
                 // route those through an inline SVG <path> overlay (set below).
                 var pathLst = custGeom.GetFirstChild<Drawing.PathList>();
                 var subPaths = pathLst?.Elements<Drawing.Path>().ToList() ?? new List<Drawing.Path>();
+                // A single <a:path> can still hold several subpaths (a second moveTo —
+                // e.g. a glyph with a hole) or an open one (no <a:close/> — a polyline).
+                // One polygon would join the contours with a seam and close the open
+                // stroke, so those take the SVG route as well.
                 var needsSvg = subPaths.Count > 1
-                    || subPaths.Any(p => p.Fill?.Value == Drawing.PathFillModeValues.None);
+                    || subPaths.Any(p => p.Fill?.Value == Drawing.PathFillModeValues.None)
+                    || subPaths.Any(HasOpenOrMultipleSubpaths);
 
                 if (needsSvg)
                 {
@@ -453,7 +458,18 @@ public partial class PowerPointHandler
 
         // For non-rectangular shapes (clip-path or border-radius), add extra inner padding
         // so text doesn't appear outside the visible shape area.
-        if ((!string.IsNullOrEmpty(clipPathCss) || !string.IsNullOrEmpty(borderRadiusCss)) && presetGeom?.Preset?.HasValue == true)
+        // Presets whose text rectangle the spec defines exactly: the bodyPr insets
+        // apply inside it, so the two add up (PowerPoint places a chevron's text
+        // between the notch and the point, not at the box edge).
+        var presetTextRect = PresetTextRectInsets(presetGeom, cx, cy);
+        if (presetTextRect is { } tr)
+        {
+            lIns += (long)tr.L;
+            tIns += (long)tr.T;
+            rIns += (long)tr.R;
+            bIns += (long)tr.B;
+        }
+        else if ((!string.IsNullOrEmpty(clipPathCss) || !string.IsNullOrEmpty(borderRadiusCss)) && presetGeom?.Preset?.HasValue == true)
         {
             var (pctL, pctT, pctR, pctB) = GetShapeTextInsetPercent(presetGeom.Preset!.InnerText!);
             if (pctL > 0 || pctT > 0 || pctR > 0 || pctB > 0)
@@ -479,19 +495,18 @@ public partial class PowerPointHandler
 
         // Vertical alignment class.
         //
-        // Default (no explicit anchor, nothing inherited) is shape-kind
-        // dependent in real PowerPoint:
-        //   - text box (<p:cNvSpPr txBox="1">)  → top
-        //   - placeholder (<p:ph>)              → inherits from layout/master
-        //                                          (resolved below via
-        //                                          ResolveInheritedAnchor)
-        //   - autoshape (prstGeom/custGeom, no txBox) → center
+        // Default (no explicit anchor, nothing inherited) is top — the schema
+        // default of <a:bodyPr anchor>, and what PowerPoint renders for an
+        // autoshape written with a bare <a:bodyPr/>. Shapes drawn in the
+        // PowerPoint UI look centred only because the UI writes anchor="ctr"
+        // on them explicitly; assuming centre for every autoshape moved the
+        // text of shapes that carry no anchor.
+        //   - placeholder (<p:ph>) → inherits from layout/master (resolved
+        //     below via ResolveInheritedAnchor)
         // An explicit <a:bodyPr anchor="t|ctr|b"> always wins.
         var isPlaceholder = shape.NonVisualShapeProperties?.ApplicationNonVisualDrawingProperties
             ?.GetFirstChild<PlaceholderShape>() != null;
-        var isTextBox = shape.NonVisualShapeProperties?.NonVisualShapeDrawingProperties
-            ?.TextBox?.Value == true;
-        var valign = (!isPlaceholder && !isTextBox) ? "center" : "top";
+        var valign = "top";
         if (bodyPr?.Anchor?.HasValue == true)
         {
             valign = bodyPr.Anchor.InnerText switch
@@ -1016,16 +1031,12 @@ public partial class PowerPointHandler
         "star5" => (0.28, 0.28, 0.28, 0.28),
         "star6" => (0.25, 0.25, 0.25, 0.25),
         "star8" or "star10" or "star12" => (0.20, 0.20, 0.20, 0.20),
-        "hexagon" => (0.25, 0.10, 0.25, 0.10),
         "pentagon" => (0.12, 0.12, 0.12, 0),
         "heptagon" or "octagon" or "decagon" or "dodecagon" => (0.08, 0.08, 0.08, 0.08),
-        "parallelogram" => (0.15, 0, 0.15, 0),
-        "trapezoid" => (0.12, 0, 0.12, 0),
         "rightArrow" or "notchedRightArrow" => (0, 0.20, 0.25, 0.20),
         "leftArrow" => (0.25, 0.20, 0, 0.20),
         "upArrow" => (0.20, 0.25, 0.20, 0),
         "downArrow" => (0.20, 0, 0.20, 0.25),
-        "chevron" or "homePlate" => (0, 0, 0.15, 0),
         "heart" => (0.15, 0.15, 0.15, 0.15),
         "plus" or "cross" => (0.10, 0.10, 0.10, 0.10),
         "cloud" or "cloudCallout" => (0.12, 0.12, 0.12, 0.12),
@@ -2761,7 +2772,7 @@ public partial class PowerPointHandler
             if (!_glbDataCache.TryGetValue(hash, out glbVarName!))
             {
                 glbVarName = $"_glb{_glbDataCache.Count}";
-                sb.AppendLine($"<script>window.{glbVarName}='{Convert.ToBase64String(bytes)}';</script>");
+                sb.AppendLine($"<script{Core.PreviewCsp.NonceAttr}>window.{glbVarName}='{Convert.ToBase64String(bytes)}';</script>");
                 _glbDataCache[hash] = glbVarName;
             }
         }
@@ -2830,7 +2841,7 @@ public partial class PowerPointHandler
             sb.AppendLine($"      <img class=\"m3d-fallback\" src=\"{fallbackImgSrc}\" style=\"width:100%;height:100%;object-fit:contain;display:none;\" />");
         sb.AppendLine("    </div>");
 
-        sb.AppendLine($@"    <script type=""module"">
+        sb.AppendLine($@"    <script type=""module""{Core.PreviewCsp.NonceAttr}>
     let THREE, GLTFLoader;
     try {{
       // Mirror-first via the importmap (CONSISTENCY(katex-mirror), see Core/ThreeAssets)
