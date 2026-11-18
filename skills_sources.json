@@ -186,7 +186,7 @@
         "branch": "main",
         "copy_rules": [
             {
-                "source": "skills",
+                "source": "plugins/obsidian/skills",
                 "dest": "skills",
                 "include": [
                     "defuddle",
@@ -195,7 +195,7 @@
                 "exclude": []
             },
             {
-                "source": "skills",
+                "source": "plugins/obsidian/skills",
                 "dest": "archived/skills",
                 "include": [
                     "obsidian-bases",

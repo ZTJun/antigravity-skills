@@ -157,3 +157,5 @@ for ((i=0; i<count; i++)); do
     echo "✅ Finished syncing $name."
     echo ""
 done
+echo "🩹 Fixing SKILL.md frontmatter..."
+python3 scripts/fix_skill_frontmatter.py skills
