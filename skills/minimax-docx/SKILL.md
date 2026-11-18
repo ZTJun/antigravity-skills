@@ -13,17 +13,6 @@ metadata:
     - GB/T 9704-2012 Layout Standard for Official Documents
     - IEEE / ACM / APA / MLA / Chicago / Turabian Style Guides
     - Springer LNCS / Nature / HBR Document Templates
-triggers:
-  - Word
-  - docx
-  - document
-  - 文档
-  - Word文档
-  - 报告
-  - 合同
-  - 公文
-  - 排版
-  - 套模板
 ---
 
 # minimax-docx
